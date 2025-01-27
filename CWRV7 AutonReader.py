@@ -56,15 +56,15 @@ def bprint(*args, **kwargs):
 def clearscreen():
     brain.screen.clear_screen()
     brain.screen.set_cursor(1,1)
-    brain.screen.set_font(FontType.MONO20)
-    brain.screen.set_fill_color(Color.RED)
-    brain.screen.set_pen_color(Color.RED)
-    brain.screen.draw_rectangle(0, 0, 480, 36)
-    brain.screen.set_pen_color(Color.WHITE)
-    bprint(" "*14 + "AutonPlayback v1.0.0")
-    brain.screen.set_font(FontType.MONO12)
-    brain.screen.set_cursor(3,1)
-    bprint(" "*18 + "WRITE MODE ACTIVATED")
+    #brain.screen.set_font(FontType.MONO20)
+    #brain.screen.set_fill_color(Color.RED)
+    #brain.screen.set_pen_color(Color.RED)
+    #brain.screen.draw_rectangle(0, 0, 480, 36)
+    #brain.screen.set_pen_color(Color.WHITE)
+    #bprint(" "*14 + "AutonPlayback v1.0.0")
+    #brain.screen.set_font(FontType.MONO12)
+    #brain.screen.set_cursor(3,1)
+    #bprint(" "*18 + "WRITE MODE ACTIVATED")
 
 # CoOoOoOoOol credits, remove in prod
 bprint("-----------------------------------------------")
@@ -227,10 +227,13 @@ brainupdate_thread = Thread(brainupdate)
 
 def loadState():
     global log, state
-    log = [(float(x.strip().split("\t")[0])*1000, x.strip().split("\t")[1], (bool(x.strip().split("\t")[2]) if "e" in x.strip().split("\t")[2] else int(x.strip().split("\t")))) for x in fseq.readlines()]
+    log = [(float(x.strip().split("\t")[0])*1000, x.strip().split("\t")[1], (bool(x.strip().split("\t")[2]) if "e" in x.strip().split("\t")[2] else int(x.strip().split("\t")[2]))) for x in fseq.readlines()]
     brain.timer.clear()
 
     while len(log):
+        clearscreen()
+        for i in range(min(10, len(log))):
+            bprint(":".join(map(str, log[i])))
         if brain.timer.time(MSEC) >= log[0][0]:
             state[log[0][1]] = log[0][2]
             log.pop(0)
