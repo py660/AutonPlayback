@@ -1,3 +1,5 @@
+
+
 #region VEXcode Generated Robot Configuration
 from vex import *
 import urandom
@@ -6,41 +8,31 @@ import urandom
 brain=Brain()
 
 # Robot configuration code
-left_drive_smart = Motor(Ports.PORT1, GearSetting.RATIO_18_1, False)
-right_drive_smart = Motor(Ports.PORT2, GearSetting.RATIO_18_1, True)
-drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 319.19, 319.19, 40, MM, 1)
+left_drive_smart = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
+right_drive_smart = Motor(Ports.PORT2, GearSetting.RATIO_18_1, False)
+drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 319.19, 295, 40, MM, 1)
 controller_1 = Controller(PRIMARY)
-Conveyer = Motor(Ports.PORT3, GearSetting.RATIO_6_1, False)
-digital_out_a = DigitalOut(brain.three_wire_port.a)
+Conveyer = Motor(Ports.PORT3, GearSetting.RATIO_6_1, True)
+Intake = Motor(Ports.PORT4, GearSetting.RATIO_18_1, True)
+PneumaticClaw = DigitalOut(brain.three_wire_port.a)
+DavidWhacker = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
+Flash = DigitalOut(brain.three_wire_port.c)
 
-
-# wait for rotation sensor to fully initialize
 wait(30, MSEC)
 
-
-# Make random actually random
 def initializeRandomSeed():
-    wait(100, MSEC)
-    random = brain.battery.voltage(MV) + brain.battery.current(CurrentUnits.AMP) * 100 + brain.timer.system_high_res()
-    urandom.seed(int(random))
-      
-# Set random seed 
+  wait(100, MSEC)
+  random = brain.battery.voltage(MV) + brain.battery.current(CurrentUnits.AMP) * 100 + brain.timer.system_high_res()
+  urandom.seed(int(random))
+  
 initializeRandomSeed()
 
-
 def play_vexcode_sound(sound_name):
-    # Helper to make playing sounds from the V5 in VEXcode easier and
-    # keeps the code cleaner by making it clear what is happening.
-    print("VEXPlaySound:" + sound_name)
-    wait(5, MSEC)
+  print("VEXPlaySound:" + sound_name)
+  wait(5, MSEC)
 
-# add a small delay to make sure we don't print in the middle of the REPL header
 wait(200, MSEC)
-# clear the console to make sure we don't have the REPL in the console
 print("\033[2J")
-
-#endregion VEXcode Generated Robot Configuration
-
 # ------------------------------------------
 # 
 # 	Project:      VEXcode Project
@@ -99,40 +91,6 @@ bprint("File successfully opened. Reading inputs...")
 # 480 x 240
 
 
-
-#region VEXcode Generated Robot Configuration
-from vex import *
-import urandom
-
-# Brain should be defined by default
-brain=Brain()
-
-# Robot configuration code
-left_drive_smart = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
-right_drive_smart = Motor(Ports.PORT2, GearSetting.RATIO_18_1, False)
-drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 319.19, 295, 40, MM, 1)
-controller_1 = Controller(PRIMARY)
-Conveyer = Motor(Ports.PORT3, GearSetting.RATIO_6_1, True)
-Intake = Motor(Ports.PORT4, GearSetting.RATIO_18_1, True)
-PneumaticClaw = DigitalOut(brain.three_wire_port.a)
-DavidWhacker = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
-Flash = DigitalOut(brain.three_wire_port.c)
-
-wait(30, MSEC)
-
-def initializeRandomSeed():
-  wait(100, MSEC)
-  random = brain.battery.voltage(MV) + brain.battery.current(CurrentUnits.AMP) * 100 + brain.timer.system_high_res()
-  urandom.seed(int(random))
-  
-initializeRandomSeed()
-
-def play_vexcode_sound(sound_name):
-  print("VEXPlaySound:" + sound_name)
-  wait(5, MSEC)
-
-wait(200, MSEC)
-print("\033[2J")
 
 # define variables used for controlling motors based on controller inputs
 controller_1_left_shoulder_control_motors_stopped = True
@@ -249,7 +207,7 @@ state = {
     "L1": 0,
     "L2": 0,
     "R1": 0,
-    "R2": 0
+    "R2": 0,
     "Up": 0,
     "Down": 0,
     "X": 0,
@@ -269,7 +227,7 @@ brainupdate_thread = Thread(brainupdate)
 
 def loadState():
     global log, state
-    log = [(int(float(x.strip().split("\t")[0])*1000), x.strip().split("\t")[1], (bool(x.strip().split("\t")[2]) if "e" in x.strip().split("\t")[2] else int(x.strip().split("\t"))) for x in fseq.readlines()]
+    log = [(float(x.strip().split("\t")[0])*1000, x.strip().split("\t")[1], (bool(x.strip().split("\t")[2]) if "e" in x.strip().split("\t")[2] else int(x.strip().split("\t")))) for x in fseq.readlines()]
     brain.timer.clear()
 
     while len(log):
@@ -284,7 +242,7 @@ def loadState():
 Thread(loadState())
 
 def autonPlayback():
-    global drivetrain_l_needs_to_be_stopped_controller_1, drivetrain_r_needs_to_be_stopped_controller_1, controller_1_left_shoulder_control_motors_stopped, controller_1_right_shoulder_control_motors_stopped, controller_1_x_b_buttons_control_motors_stopped, remote_control_code_enabled
+  global drivetrain_l_needs_to_be_stopped_controller_1, drivetrain_r_needs_to_be_stopped_controller_1, controller_1_left_shoulder_control_motors_stopped, controller_1_right_shoulder_control_motors_stopped, controller_1_x_b_buttons_control_motors_stopped, remote_control_code_enabled
   # process the controller input every 20 milliseconds
   # update the motors based on the input values
   while True:
@@ -382,6 +340,7 @@ def autonPlayback():
       wait(20, MSEC)
 
 def resetState():
+    pass
 
 # define variable for remote controller enable/disable
 remote_control_code_enabled = True
@@ -425,7 +384,7 @@ def vexcode_driver_function():
 
 
 # register the competition functions
-#competition = Competition( vexcode_driver_function, vexcode_auton_function )
-vexcode_auton_function()
+competition = Competition( vexcode_driver_function, vexcode_auton_function )
+#vexcode_auton_function()
 # Yo Yo Yo What's Up Saxe Middle School?!
 # what's up!!
