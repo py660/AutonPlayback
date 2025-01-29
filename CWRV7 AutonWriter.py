@@ -6,7 +6,6 @@ import urandom
 brain=Brain()
 
 # Robot configuration code
-controller_1 = Controller(PRIMARY)
 
 
 # wait for rotation sensor to fully initialize
@@ -36,21 +35,34 @@ print("\033[2J")
 
 #endregion VEXcode Generated Robot Configuration
 
+# DO NOT ADD ANY DEVICES USING THE GUI MENU
+
 # ------------------------------------------
 # 
-# 	Project:      VEXcode Project
-#	Author:       VEX
+# 	Project:      CWRV7 AutonWriter
+#	Author:       py660, S.Wang
 #	Created:
-#	Description:  VEXcode V5 Python Project
+#	Description:  github.com/py660/AutonPlayback
 # 
 # ------------------------------------------
 
+SAVE_SLOT = 0
+
+
+# Devices
+left_drive_smart = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
+right_drive_smart = Motor(Ports.PORT2, GearSetting.RATIO_18_1, False)
+drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 319.19, 295, 40, MM, 1)
+controller_1 = Controller(PRIMARY)
+controller = controller_1
+Conveyer = Motor(Ports.PORT3, GearSetting.RATIO_6_1, True)
+Intake = Motor(Ports.PORT4, GearSetting.RATIO_18_1, True)
+PneumaticClaw = DigitalOut(brain.three_wire_port.a)
+DavidWhacker = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
+Flash = DigitalOut(brain.three_wire_port.c)
 controller = controller_1
 
-# Library imports
-from vex import *
-
-# Begin project code
+#AutonPlayback Helpers
 
 def bprint(*args, **kwargs):
     brain.screen.print(*args, **kwargs)
@@ -59,41 +71,28 @@ def bprint(*args, **kwargs):
 def clearscreen():
     brain.screen.clear_screen()
     brain.screen.set_cursor(1,1)
-    brain.screen.set_font(FontType.MONO20)
-    brain.screen.set_fill_color(Color.RED)
-    brain.screen.set_pen_color(Color.RED)
-    brain.screen.draw_rectangle(0, 0, 480, 36)
-    brain.screen.set_pen_color(Color.WHITE)
-    bprint(" "*15 + "AutonWriter v1.0.0")
     brain.screen.set_font(FontType.MONO12)
-    brain.screen.set_cursor(3,1)
-    bprint(" "*18 + "WRITE MODE ACTIVATED")
+    #brain.screen.set_font(FontType.MONO20)
+    #brain.screen.set_fill_color(Color.RED)
+    #brain.screen.set_pen_color(Color.RED)
+    #brain.screen.draw_rectangle(0, 0, 480, 36)
+    #brain.screen.set_pen_color(Color.WHITE)
+    #bprint(" "*14 + "AutonPlayback v1.0.0")
+    #brain.screen.set_font(FontType.MONO12)
+    #brain.screen.set_cursor(3,1)
+    #bprint(" "*18 + "WRITE MODE ACTIVATED")
+
+def cprint(*args, **kwargs):
+    controller.screen.print(*args, **kwargs)
+    controller.screen.next_row()
+
+def ctrlclear():
+    controller.screen.clear_screen()
+    controller.screen.set_cursor(1,1)
 
 bprint("Awaiting controller input...")
-brain.screen.set_font(FontType.MONO60)
-"""SAVE_SLOT_TEMP = -1
-
-controller.screen.clear_screen()
-controller.screen.print("Select a save slot (X=0,Y=1,A=2,B=3)")
-
-def setsave(i):
-    SAVE_SLOT_TEMP = i
-
-controller.buttonX.pressed(setsave(0))
-controller.buttonY.pressed(setsave(1))
-controller.buttonA.pressed(setsave(2))
-controller.buttonB.pressed(setsave(3))
-
-while SAVE_SLOT_TEMP == -1:
-    wait(500, MSEC)
-
-SAVE_SLOT = SAVE_SLOT_TEMP
-clearscreen()
-"""
-SAVE_SLOT = 0
 
 # CoOoOoOoOol credits, remove in prod
-brain.screen.set_font(FontType.MONO12)
 bprint("-----------------------------------------------")
 bprint("| Submit a PR: github.com/py660/AutonPlayback |")
 bprint("-----------------------------------------------")
@@ -108,9 +107,15 @@ except OSError as e:
     bprint("File IO operation exited with", e)
     bprint("Did you insert an SD card with an appropriate FS (e.g. FAT32)?")
 
-brain.timer.clear()
-bprint("File successfully opened. Awaiting inputs...")
+bprint("File successfully opened. Awaiting start command...")
 bprint("Tap screen to stop recording.")
+
+
+cprint("Press X to start")
+controller.rumble("..")
+
+startseq = False
+startseqcountdown = False
 
 controller_1.buttonDown.pressed(lambda: btnupdate("Down", True))
 controller_1.buttonDown.released(lambda: btnupdate("Down", False))
@@ -131,6 +136,22 @@ controller_1.buttonX.released(lambda: btnupdate("X", False))
 controller_1.axis2.changed(lambda: axisupdate("Left", controller.axis2))
 controller_1.axis3.changed(lambda: axisupdate("Right", controller.axis3))
 
+while not startseqcountdown:
+    wait(50, MSEC)
+
+for i in range(3, 0, -1):
+    ctrlclear()
+    cprint(i)
+    controller.rumble(".")
+    wait(1, SECONDS)
+ctrlclear()
+cprint("GO!")
+controller.rumble("-")
+startseq = True
+
+
+brain.timer.clear()
+
 log = []
 
 def save():
@@ -139,10 +160,15 @@ def save():
     fseq.close()
     clearscreen()
     bprint("Done writing!")
+    ctrlclear()
+    cprint("Saved!")
+    controller.rumble("-")
+    wait(120, SECONDS)
     while True:
-        wait(100, SECONDS)
+        controller.rumble("-.")
+        wait(50, MSEC)
 
-brain.screen.pressed(save)
+#brain.screen.pressed(save)
 
 # 17 rows avail.
 # 480 x 240
@@ -155,9 +181,15 @@ def brainupdate():
 brainupdate_thread = Thread(brainupdate)
 
 def btnupdate(key, pressed):
+    if not startseq:
+        if key == "X":
+            startseqcountdown = True
+        return
     log.append((brain.timer.time(MSEC)/1000, key, pressed))
 
 def axisupdate(side, ctrlaxis):
+    if not startseq:
+        return
     log.append((brain.timer.time(MSEC)/1000, side, ctrlaxis.position()))
 
 # define variables used for controlling motors based on controller inputs
@@ -173,8 +205,12 @@ def mainloop():
   # process the controller input every 20 milliseconds
   # update the motors based on the input values
   while True:
-      if True:
-        
+      if not startseq:
+          pass
+      elif brain.timer.time(MSEC) > 15000:
+          startseq = False
+          save()
+      else:
           # calculate the drivetrain motor velocities from the controller joystick axies
           # left = axis3
           # right = axis2
