@@ -211,6 +211,8 @@ def mainloop():
           startseq = False
           save()
       else:
+          ctrlclear()
+          cprint(15 - brain.timer.time(MSEC)//1000)
           # calculate the drivetrain motor velocities from the controller joystick axies
           # left = axis3
           # right = axis2
