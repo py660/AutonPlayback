@@ -243,7 +243,6 @@ def loadState():
     brain.timer.clear()
 
     while len(log):
-        for i in range(min(10, len(log))):
         if brain.timer.time(MSEC) >= log[0][0]:
             state[log[0][1]] = log[0][2]
             log.pop(0)
