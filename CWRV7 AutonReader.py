@@ -1,5 +1,3 @@
-
-
 #region VEXcode Generated Robot Configuration
 from vex import *
 import urandom
@@ -8,6 +6,48 @@ import urandom
 brain=Brain()
 
 # Robot configuration code
+
+
+# wait for rotation sensor to fully initialize
+wait(30, MSEC)
+
+
+# Make random actually random
+def initializeRandomSeed():
+    wait(100, MSEC)
+    random = brain.battery.voltage(MV) + brain.battery.current(CurrentUnits.AMP) * 100 + brain.timer.system_high_res()
+    urandom.seed(int(random))
+      
+# Set random seed 
+initializeRandomSeed()
+
+
+def play_vexcode_sound(sound_name):
+    # Helper to make playing sounds from the V5 in VEXcode easier and
+    # keeps the code cleaner by making it clear what is happening.
+    print("VEXPlaySound:" + sound_name)
+    wait(5, MSEC)
+
+# add a small delay to make sure we don't print in the middle of the REPL header
+wait(200, MSEC)
+# clear the console to make sure we don't have the REPL in the console
+print("\033[2J")
+
+#endregion VEXcode Generated Robot Configuration
+
+# THIS PROGRAM DEPENDS ON THE GUI DEVICES MENU BEING *EMPTY* (NO DEVICES ADDED)
+
+
+# ------------------------------------------
+#
+#   Project:      CWRV7 AutonReader
+#   Author:       py660, S.Wang
+#   Created:
+#   Description:  github.com/py660/AutonPlayback
+#
+# ------------------------------------------
+
+# Devices
 left_drive_smart = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
 right_drive_smart = Motor(Ports.PORT2, GearSetting.RATIO_18_1, False)
 drivetrain = DriveTrain(left_drive_smart, right_drive_smart, 319.19, 295, 40, MM, 1)
@@ -17,37 +57,10 @@ Intake = Motor(Ports.PORT4, GearSetting.RATIO_18_1, True)
 PneumaticClaw = DigitalOut(brain.three_wire_port.a)
 DavidWhacker = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
 Flash = DigitalOut(brain.three_wire_port.c)
-
-wait(30, MSEC)
-
-def initializeRandomSeed():
-  wait(100, MSEC)
-  random = brain.battery.voltage(MV) + brain.battery.current(CurrentUnits.AMP) * 100 + brain.timer.system_high_res()
-  urandom.seed(int(random))
-  
-initializeRandomSeed()
-
-def play_vexcode_sound(sound_name):
-  print("VEXPlaySound:" + sound_name)
-  wait(5, MSEC)
-
-wait(200, MSEC)
-print("\033[2J")
-# ------------------------------------------
-# 
-# 	Project:      VEXcode Project
-#	Author:       Me
-#	Created:
-#	Description:  VEXcode V5 Python Project
-# 
-# ------------------------------------------
-
 controller = controller_1
 
-# Library imports
-from vex import *
 
-# Begin project code
+#AutonPlayback Helpers
 
 def bprint(*args, **kwargs):
     brain.screen.print(*args, **kwargs)
@@ -56,6 +69,7 @@ def bprint(*args, **kwargs):
 def clearscreen():
     brain.screen.clear_screen()
     brain.screen.set_cursor(1,1)
+    brain.screen.set_font(FontType.MONO12)
     #brain.screen.set_font(FontType.MONO20)
     #brain.screen.set_fill_color(Color.RED)
     #brain.screen.set_pen_color(Color.RED)
@@ -66,17 +80,21 @@ def clearscreen():
     #brain.screen.set_cursor(3,1)
     #bprint(" "*18 + "WRITE MODE ACTIVATED")
 
+def cprint(*args, **kwargs):
+    controller.screen.print(*args, **kwargs)
+    controller.screen.next_row()
+
+def ctrlclear():
+    controller.screen.clear_screen()
+    controller.screen.set_cursor(1,1)
+
 # CoOoOoOoOol credits, remove in prod
 bprint("-----------------------------------------------")
 bprint("| Submit a PR: github.com/py660/AutonPlayback |")
 bprint("-----------------------------------------------")
 
-controller.rumble("-")
-bprint("Please choose a save slot on the controller (X,Y,A,B)")
-controller.rumble("..")
-
 try:
-    bprint("Opening drive sequence file for reading...")
+    bprint("Opening sequence file on SD card for reading...")
     fseq = open("sequence0.txt", "r")
 except OSError as e:
     bprint("File IO operation exited with", e)
@@ -85,24 +103,12 @@ except OSError as e:
 bprint("File successfully opened. Reading inputs...")
 
 
-
-
-
-# 480 x 240
-
-
-
-# define variables used for controlling motors based on controller inputs
 controller_1_left_shoulder_control_motors_stopped = True
 controller_1_right_shoulder_control_motors_stopped = True
 controller_1_x_b_buttons_control_motors_stopped = True
 drivetrain_l_needs_to_be_stopped_controller_1 = False
 drivetrain_r_needs_to_be_stopped_controller_1 = False
 
-
-
-
-# mainloop
 def rc_auto_loop_function_controller_1():
   global drivetrain_l_needs_to_be_stopped_controller_1, drivetrain_r_needs_to_be_stopped_controller_1, controller_1_left_shoulder_control_motors_stopped, controller_1_right_shoulder_control_motors_stopped, controller_1_x_b_buttons_control_motors_stopped, remote_control_code_enabled
   # process the controller input every 20 milliseconds
@@ -219,30 +225,33 @@ state = {
 log = []
 
 def brainupdate():
-    for line in log[-10:]:
+    while True:
         clearscreen()
-        bprint("\t".join(line))
+        for line in log[-10:]:
+            bprint(":".join(line))
+        wait(50, MSEC)
 
 brainupdate_thread = Thread(brainupdate)
 
 def loadState():
     global log, state
-    log = [(float(x.strip().split("\t")[0])*1000, x.strip().split("\t")[1], (bool(x.strip().split("\t")[2]) if "e" in x.strip().split("\t")[2] else int(x.strip().split("\t")[2]))) for x in fseq.readlines()]
+    log = [
+        (
+            float(x.strip().split("\t")[0])*1000, x.strip().split("\t")[1],
+            (bool(x.strip().split("\t")[2]) if "e" in x.strip().split("\t")[2] else float(x.strip().split("\t")[2]))
+        ) for x in fseq.readlines()]
     brain.timer.clear()
 
     while len(log):
-        clearscreen()
         for i in range(min(10, len(log))):
-            bprint(":".join(map(str, log[i])))
         if brain.timer.time(MSEC) >= log[0][0]:
             state[log[0][1]] = log[0][2]
             log.pop(0)
         else:
             wait(1, MSEC)
-    
-    
 
 Thread(loadState())
+
 
 def autonPlayback():
   global drivetrain_l_needs_to_be_stopped_controller_1, drivetrain_r_needs_to_be_stopped_controller_1, controller_1_left_shoulder_control_motors_stopped, controller_1_right_shoulder_control_motors_stopped, controller_1_x_b_buttons_control_motors_stopped, remote_control_code_enabled
@@ -342,14 +351,9 @@ def autonPlayback():
       # wait before repeating the process
       wait(20, MSEC)
 
-def resetState():
-    pass
-
 # define variable for remote controller enable/disable
 remote_control_code_enabled = True
 
-
-#endregion VEXcode Generated Robot Configuration
 
 def onauton_autonomous_0():
     pass
@@ -369,8 +373,6 @@ def vexcode_auton_function():
   # Stop the autonomous control tasks
   playback_task.stop()
   auton_task_0.stop()
-
-  resetState()
 
 
 def vexcode_driver_function():
