@@ -363,6 +363,8 @@ def ondriver_drivercontrol_0():
 
 # create a function for handling the starting and stopping of all autonomous tasks
 def vexcode_auton_function():
+  ctrlclear()
+  cprint("Auton started")
   # Start the autonomous control tasks
   playback_task = Thread(autonPlayback)
   auton_task_0 = Thread(onauton_autonomous_0)
@@ -376,6 +378,8 @@ def vexcode_auton_function():
 
 
 def vexcode_driver_function():
+  ctrlclear()
+  cprint("Driver control started")
   # Start the driver control tasks
   rc_auto_loop_thread_controller_1 = Thread(rc_auto_loop_function_controller_1)
   drive_control_task_0 = Thread( ondriver_drivercontrol_0() )
