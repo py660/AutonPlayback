@@ -60,7 +60,6 @@ Intake = Motor(Ports.PORT4, GearSetting.RATIO_18_1, True)
 PneumaticClaw = DigitalOut(brain.three_wire_port.a)
 DavidWhacker = Motor(Ports.PORT11, GearSetting.RATIO_6_1, False)
 Flash = DigitalOut(brain.three_wire_port.c)
-controller = controller_1
 
 #AutonPlayback Helpers
 
@@ -117,6 +116,21 @@ controller.rumble("..")
 startseq = False
 startseqcountdown = False
 
+def btnupdate(key, pressed):
+    global startseqcountdown
+    #bprint("btnupdate")
+    #bprint(key)
+    if not startseq:
+        if key == "X":
+            startseqcountdown = True
+        return
+    log.append((brain.timer.time(MSEC)/1000, key, pressed))
+
+def axisupdate(side, ctrlaxis):
+    if not startseq:
+        return
+    log.append((brain.timer.time(MSEC)/1000, side, ctrlaxis.position()))
+
 controller_1.buttonDown.pressed(lambda: btnupdate("Down", True))
 controller_1.buttonDown.released(lambda: btnupdate("Down", False))
 controller_1.buttonUp.pressed(lambda: btnupdate("Up", True))
@@ -133,11 +147,13 @@ controller_1.buttonB.pressed(lambda: btnupdate("B", True))
 controller_1.buttonB.released(lambda: btnupdate("B", False))
 controller_1.buttonX.pressed(lambda: btnupdate("X", True))
 controller_1.buttonX.released(lambda: btnupdate("X", False))
-controller_1.axis2.changed(lambda: axisupdate("Left", controller.axis2))
-controller_1.axis3.changed(lambda: axisupdate("Right", controller.axis3))
+controller_1.axis2.changed(lambda: axisupdate("Right", controller.axis2))
+controller_1.axis3.changed(lambda: axisupdate("Left", controller.axis3))
 
 while not startseqcountdown:
-    wait(50, MSEC)
+    #bprint("Waiting")
+    #bprint(startseqcountdown)
+    wait(500, MSEC)
 
 for i in range(3, 0, -1):
     ctrlclear()
@@ -154,43 +170,31 @@ brain.timer.clear()
 
 log = []
 
-def save():
-    for line in log:
-        fseq.write("\t".join(map(str, line)) + "\n")
-    fseq.close()
-    clearscreen()
-    bprint("Done writing!")
-    ctrlclear()
-    cprint("Saved!")
-    controller.rumble("-")
-    wait(120, SECONDS)
-    while True:
-        controller.rumble("-.")
-        wait(50, MSEC)
-
 #brain.screen.pressed(save)
 
 # 17 rows avail.
 # 480 x 240
 
 def brainupdate():
-    for line in log[-10:]:
+    while True:
         clearscreen()
-        bprint("\t".join(line))
+        for line in log[-10:]:
+            bprint("\t".join(map(str, line)))
+        wait(250, MSEC)
 
 brainupdate_thread = Thread(brainupdate)
 
-def btnupdate(key, pressed):
-    if not startseq:
-        if key == "X":
-            startseqcountdown = True
-        return
-    log.append((brain.timer.time(MSEC)/1000, key, pressed))
 
-def axisupdate(side, ctrlaxis):
-    if not startseq:
-        return
-    log.append((brain.timer.time(MSEC)/1000, side, ctrlaxis.position()))
+def save():
+    for line in log:
+        fseq.write("\t".join(list(map(str, line))) + "\n")
+    fseq.close()
+    clearscreen()
+    brainupdate_thread.stop()
+    bprint("Done writing!")
+    ctrlclear()
+    cprint("Saved!")
+    controller.rumble("-")
 
 # define variables used for controlling motors based on controller inputs
 controller_1_left_shoulder_control_motors_stopped = True
@@ -206,7 +210,15 @@ def mainloop():
   # update the motors based on the input values
   while True:
       if not startseq:
-          pass
+          left_drive_smart.stop()
+          right_drive_smart.stop()
+          Conveyer.stop()
+          Intake.stop()
+          DavidWhacker.stop()
+          wait(120, SECONDS)
+          while True:
+              controller.rumble("-.")
+              wait(50, MSEC)
       elif brain.timer.time(MSEC) > 15000:
           startseq = False
           save()
