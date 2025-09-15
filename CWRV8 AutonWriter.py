@@ -49,15 +49,37 @@ print("\033[2J")
 # 
 # ------------------------------------------
 
+import math
 SAVE_SLOT = 0
 
 
 # Devices
-lmot1 = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
-lmot2 = Motor(Ports.PORT2, GearSetting.RATIO_18_1, True)
-lmot = MotorGroup(lmot1, lmot2)
-rmot1 = Motor(Ports.PORT3, GearSetting.RATIO_18_1, False)
-rmot2 = Motor(Ports.PORT4, GearSetting.RATIO_18_1, False)
-rmot = MotorGroup(rmot1, rmot2)
+lfmot = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
+lbmot = Motor(Ports.PORT2, GearSetting.RATIO_18_1, True)
+lmot = MotorGroup(lfmot, lbmot)
+rfmot = Motor(Ports.PORT3, GearSetting.RATIO_18_1, True)
+rbmot = Motor(Ports.PORT4, GearSetting.RATIO_18_1, True)
+rmot = MotorGroup(rfmot, rbmot)
 drivetrain = DriveTrain(lmot, rmot, 329.16, 330.2, 254, MM, 1) # 3rd arg used to be 319.16; formula is D * pi * 25.4
 controller = Controller(PRIMARY)
+
+# start both moters at 100%
+
+while True:
+    lvel = controller.axis3.position()
+    rvel = controller.axis2.position()
+    if 5 >= lvel:
+        lmot.spin(FORWARD, lvel, PERCENT)
+    elif -5 <= lvel:
+        lmot.spin(REVERSE, -lvel, PERCENT)
+    else:
+        lmot.stop(COAST)
+        #lmot.stop(BRAKE)
+
+    if 5 >= rvel:
+        rmot.spin(FORWARD, rvel, PERCENT)
+    elif -5 <= rvel:
+        rmot.spin(REVERSE, -rvel, PERCENT)
+    else:
+        rmot.stop(BRAKE)
+        #rmot.stop(COAST)
