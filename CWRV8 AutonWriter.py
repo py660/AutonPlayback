@@ -57,29 +57,59 @@ SAVE_SLOT = 0
 lfmot = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
 lbmot = Motor(Ports.PORT2, GearSetting.RATIO_18_1, True)
 lmot = MotorGroup(lfmot, lbmot)
-rfmot = Motor(Ports.PORT3, GearSetting.RATIO_18_1, True)
-rbmot = Motor(Ports.PORT4, GearSetting.RATIO_18_1, True)
+rfmot = Motor(Ports.PORT3, GearSetting.RATIO_18_1, False)
+rbmot = Motor(Ports.PORT4, GearSetting.RATIO_18_1, False)
 rmot = MotorGroup(rfmot, rbmot)
-drivetrain = DriveTrain(lmot, rmot, 329.16, 330.2, 254, MM, 1) # 3rd arg used to be 319.16; formula is D * pi * 25.4
+inert = Inertial(Ports.PORT5)
+drivetrain = SmartDrive(lmot, rmot, inert, 329.16, 330.2, 254, MM, 1) # 3rd arg used to be 319.16; formula is D * pi * 25.4
 controller = Controller(PRIMARY)
 
-# start both moters at 100%
+def calInert():
+    sleep(200, MSEC)
+    brain.screen.print("Calibrating inertial sensor...")
+    brain.screen.next_row()
+    brain.screen.print("Please make sure the robot is facing forward.")
+    brain.screen.next_row()
+    brain.screen.print("Do not move the robot until calibration is complete!")
+    inert.calibrate()
+    while inert.is_calibrating(): sleep(25, MSEC)
+    drivetrain.set_heading(0)
+    brain.screen.clear_screen()
+    brain.screen.set_cursor(1, 1)
 
-while True:
-    lvel = controller.axis3.position()
-    rvel = controller.axis2.position()
-    if 5 >= lvel:
-        lmot.spin(FORWARD, lvel, PERCENT)
-    elif -5 <= lvel:
-        lmot.spin(REVERSE, -lvel, PERCENT)
-    else:
-        lmot.stop(COAST)
-        #lmot.stop(BRAKE)
 
-    if 5 >= rvel:
-        rmot.spin(FORWARD, rvel, PERCENT)
-    elif -5 <= rvel:
-        rmot.spin(REVERSE, -rvel, PERCENT)
-    else:
-        rmot.stop(BRAKE)
-        #rmot.stop(COAST)
+# Calibrate the Drivetrain
+calInert()
+
+
+brakemode = HOLD
+
+def auton():
+    drivetrain.turn_to_heading(90, DEGREES, wait=True)
+    drivetrain.drive_for(FORWARD, 24, INCHES, wait=True)
+    drivetrain.turn_to_heading(300, DEGREES, wait=True)
+    sleep(1, SECONDS)
+    drivetrain.turn_to_heading(180, DEGREES)
+    drivetrain.drive_for(FORWARD, 24, INCHES, wait=True)
+
+def drive():
+    while True:
+        lvel = controller.axis3.position()
+        rvel = controller.axis2.position()
+        if 5 >= lvel:
+            lmot.spin(FORWARD, lvel, PERCENT)
+        elif -5 <= lvel:
+            lmot.spin(REVERSE, -lvel, PERCENT)
+        else:
+            lmot.stop(brakemode)
+            #lmot.stop(BRAKE)
+
+        if 5 >= rvel:
+            rmot.spin(FORWARD, rvel, PERCENT)
+        elif -5 <= rvel:
+            rmot.spin(REVERSE, -rvel, PERCENT)
+        else:
+            rmot.stop(brakemode)
+            #rmot.stop(COAST)
+
+auton()

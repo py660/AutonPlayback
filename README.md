@@ -3,6 +3,8 @@
 !!!!!!!!
 Make sure that you have NO DEVICES in the GUI Devices tab.
 
-Please follow the following guide:
+2025-09-15 please use CWRV8 AutonWriter.py code. Do not add or remove any devices using the menu.
+
+Please follow the following table of contents:
 1. 24-5: <kbd>v7</kbd>
 2. **25-6: <kbd>v8</kbd>**
