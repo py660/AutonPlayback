@@ -39,6 +39,14 @@ print("\033[2J")
 "!!!WARNING: DO NOT ADD ANY DEVICES USING THE GUI MENU!!!"
 "(Well, okay, add at your own risk, but you have been warned!)"
 
+"""
+Port 1: Left Front Motor - Green Gear Cartridge
+Port 2: Left Back Motor - Green Gear Cartridge
+Port 3: Right Front Motor - Green Gear Cartridge
+Port 4: Right Back Motor - Green Gear Cartridge
+Port 5: Inertial Sensor
+Port 6: Test Pneumatics
+"""
 
 # ------------------------------------------
 # 
@@ -68,7 +76,7 @@ def calInert():
     sleep(200, MSEC)
     brain.screen.print("Calibrating inertial sensor...")
     brain.screen.next_row()
-    brain.screen.print("Please make sure the robot is facing forward.")
+    brain.screen.print("Please make sure the robot is facing towards heading 0.")
     brain.screen.next_row()
     brain.screen.print("Do not move the robot until calibration is complete!")
     inert.calibrate()
