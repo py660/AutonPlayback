@@ -40,15 +40,15 @@ print("\033[2J")
 "(Well, okay, add at your own risk, but you have been warned!)"
 
 """
-Port Configuration
-------------------------
-Port 1: Left Front Motor - Green Gear Cartridge
-Port 2: Left Back Motor - Green Gear Cartridge
-Port 3: Right Front Motor - Green Gear Cartridge
-Port 4: Right Back Motor - Green Gear Cartridge
-Port 5: Inertial Sensor
-
-3WP. A: [Experimental!] Pneumatic Solenoid
+Port 11: Left Front Motor - Green Gear Cartridge
+Port 20: Left Back Motor - Green Gear Cartridge
+Port 1: Right Front Motor - Green Gear Cartridge
+Port 10: Right Back Motor - Green Gear Cartridge
+Port 15: Inertial Sensor
+Port 6: Lower Outside Intake
+Port 18: Lower Inside Intake
+Port 7: Upper Outside Intake
+Port 17: Upper Inside Intake
 """
 
 # ------------------------------------------
@@ -65,16 +65,20 @@ SAVE_SLOT = 0
 
 
 # Devices
-lfmot = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
-lbmot = Motor(Ports.PORT2, GearSetting.RATIO_18_1, True)
+lfmot = Motor(Ports.PORT11, GearSetting.RATIO_18_1, True)
+lbmot = Motor(Ports.PORT20, GearSetting.RATIO_18_1, True)
 lmot = MotorGroup(lfmot, lbmot)
-rfmot = Motor(Ports.PORT3, GearSetting.RATIO_18_1, False)
-rbmot = Motor(Ports.PORT4, GearSetting.RATIO_18_1, False)
+rfmot = Motor(Ports.PORT1, GearSetting.RATIO_18_1, False)
+rbmot = Motor(Ports.PORT10, GearSetting.RATIO_18_1, False)
 rmot = MotorGroup(rfmot, rbmot)
-inert = Inertial(Ports.PORT5)
+inert = Inertial(Ports.PORT15)
 drivetrain = SmartDrive(lmot, rmot, inert, 329.16, 330.2, 254, MM, 1) # 3rd arg used to be 319.16; formula is D * pi * 25.4
 controller = Controller(PRIMARY)
-air1 = DigitalOut(brain.three_wire_port.a) # I don't want to type "pneumatic" all the time
+
+fin = Motor(Ports.PORT6, GearSetting.RATIO_18_1, False)
+bin = Motor(Ports.PORT18, GearSetting.RATIO_18_1, False)
+fout = Motor(Ports.PORT7, GearSetting.RATIO_18_1, True)
+bout = Motor(Ports.PORT17, GearSetting.RATIO_18_1, True)
 
 def calInert():
     sleep(200, MSEC)
@@ -93,16 +97,36 @@ def calInert():
 # Calibrate the Drivetrain
 calInert()
 
+def pickUp():
+    fin.spin(FORWARD, 100, PERCENT)
 
-BRAKEMODE = HOLD
+def putDown():
+    fin.spin(REVERSE, 100, PERCENT)
 
-def auton():
-    drivetrain.turn_to_heading(90, DEGREES, wait=True)
-    drivetrain.drive_for(FORWARD, 24, INCHES, wait=True)
-    drivetrain.turn_to_heading(300, DEGREES, wait=True)
-    sleep(1, SECONDS)
-    drivetrain.turn_to_heading(180, DEGREES)
-    drivetrain.drive_for(FORWARD, 24, INCHES, wait=True)
+def store():
+    pickUp()
+    bin.spin(FORWARD, 100, PERCENT)
+    fout.spin(REVERSE, 100, PERCENT)
+    bout.spin(FORWARD, 100, PERCENT)
+
+def putTop():
+    pickUp()
+    fout.spin(FORWARD, 100, PERCENT)
+    bin.spin(FORWARD, 100, PERCENT)
+    bout.spin(FORWARD, 100, PERCENT)
+
+def putMiddle():
+    pickUp()
+    bin.spin(FORWARD)
+    bout.spin(REVERSE)
+
+def stopIntake():
+    fin.stop(brakemode)
+    bin.stop(brakemode)
+    fout.stop(brakemode)
+    bout.stop(brakemode)
+
+brakemode = HOLD
 
 def drive():
     while True:
@@ -113,18 +137,40 @@ def drive():
         elif -5 <= lvel:
             lmot.spin(REVERSE, -lvel, PERCENT)
         else:
-            lmot.stop(BRAKEMODE)
-
+            lmot.stop(brakemode)
         if 5 >= rvel:
             rmot.spin(FORWARD, rvel, PERCENT)
         elif -5 <= rvel:
             rmot.spin(REVERSE, -rvel, PERCENT)
         else:
-            rmot.stop(BRAKEMODE)
+            rmot.stop(brakemode)
 
-        if controller.buttonL1.pressing():
-            air1.set(False) # False -> A is pressurized
+        if controller.buttonX.pressing():
+            putTop()
+        elif controller.buttonY.pressing():
+            putMiddle()
+        elif controller.buttonA.pressing():
+            store()
+        elif controller.buttonB.pressing():
+            pickUp()
+        elif controller.buttonDown.pressing():
+            putDown()
         else:
-            air1.set(True) # True -> B is pressurized
+            stopIntake()
 
-auton()
+
+
+
+def auton():
+    store()
+    drivetrain.turn_to_heading(90, DEGREES, wait=False)
+    drivetrain.drive_for(FORWARD, 24, INCHES, wait=True)
+    stopIntake()
+    drivetrain.turn_to_heading(300, DEGREES, wait=True)
+    sleep(1, SECONDS)
+    drivetrain.turn_to_heading(180, DEGREES)
+    putMiddle()
+    drivetrain.drive_for(FORWARD, 24, INCHES, wait=True)
+    time.sleep(5)
+
+competition = Competition(drive, auton)
