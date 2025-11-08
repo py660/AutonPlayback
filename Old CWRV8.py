@@ -40,12 +40,24 @@ print("\033[2J")
 "(Well, okay, add at your own risk, but you have been warned!)"
 
 """
+Port Configuration
+------------------------
 Port 1: Left Front Motor - Green Gear Cartridge
-Port 2: Left Back Motor - Green Gear Cartridge
-Port 3: Right Front Motor - Green Gear Cartridge
-Port 4: Right Back Motor - Green Gear Cartridge
+Port 2: Left Back Motor - etc.
+Port 3: Right Front Motor
+Port 4: Right Back Motor
+
 Port 5: Inertial Sensor
-Port 6: Test Pneumatics
+
+Port 6: Elevator Lowest Outer
+Port 7: Elevator Lowest Inner
+Port 8: Elevator Middle Outer
+Port 9: Elevator Highest Inner
+Port 10: Elevator Highest Outer
+
+Port 21: Controller Beacon
+
+3WP. A: [Experimental!] Pneumatic Solenoid
 """
 
 # ------------------------------------------
@@ -71,6 +83,7 @@ rmot = MotorGroup(rfmot, rbmot)
 inert = Inertial(Ports.PORT5)
 drivetrain = SmartDrive(lmot, rmot, inert, 329.16, 330.2, 254, MM, 1) # 3rd arg used to be 319.16; formula is D * pi * 25.4
 controller = Controller(PRIMARY)
+air1 = DigitalOut(brain.three_wire_port.a) # I don't want to type "pneumatic" all the time
 
 def calInert():
     sleep(200, MSEC)
@@ -90,7 +103,7 @@ def calInert():
 calInert()
 
 
-brakemode = HOLD
+BRAKEMODE = HOLD
 
 def auton():
     drivetrain.turn_to_heading(90, DEGREES, wait=True)
@@ -109,15 +122,18 @@ def drive():
         elif -5 <= lvel:
             lmot.spin(REVERSE, -lvel, PERCENT)
         else:
-            lmot.stop(brakemode)
-            #lmot.stop(BRAKE)
+            lmot.stop(BRAKEMODE)
 
         if 5 >= rvel:
             rmot.spin(FORWARD, rvel, PERCENT)
         elif -5 <= rvel:
             rmot.spin(REVERSE, -rvel, PERCENT)
         else:
-            rmot.stop(brakemode)
-            #rmot.stop(COAST)
+            rmot.stop(BRAKEMODE)
+
+        if controller.buttonL1.pressing():
+            air1.set(False) # False -> A is pressurized
+        else:
+            air1.set(True) # True -> B is pressurized
 
 auton()
