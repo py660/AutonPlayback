@@ -41,6 +41,7 @@ print("\033[2J")
 "(Well, okay, add at your own risk, but you have been warned!)"
 
 """
+<<<<<<< HEAD
 Port 11_R: Left Front Motor - Green Gear Cartridge
 Port 20_R: Left Back
 Port 1: Right Front
@@ -51,6 +52,17 @@ Port 6: Lower Outside Intake
 Port 18: Lower Inside Intake
 Port 7_R: Upper Outside Intake
 Port 17_R: Upper Inside Intake
+=======
+Port 11: Left Front Motor - Green Gear Cartridge
+Port 20: Left Back Motor - Green Gear Cartridge
+Port 1: Right Front Motor - Green Gear Cartridge
+Port 10: Right Back Motor - Green Gear Cartridge
+Port 15: Inertial Sensor
+Port 6: Lower Outside Intake
+Port 18: Lower Inside Intake
+Port 7: Upper Outside Intake
+Port 17: Upper Inside Intake
+>>>>>>> refs/remotes/origin/main
 """
 
 # ------------------------------------------
@@ -71,6 +83,11 @@ SAVE_SLOT = 0
 BRAKEMODE = HOLD
 PIDMODE = 0 # 0: normal; 1: wheel odometry priority; 2: inertial priority
 
+<<<<<<< HEAD
+=======
+
+# Devices
+>>>>>>> refs/remotes/origin/main
 lfmot = Motor(Ports.PORT11, GearSetting.RATIO_18_1, True)
 lbmot = Motor(Ports.PORT20, GearSetting.RATIO_18_1, True)
 lmot = MotorGroup(lfmot, lbmot)
@@ -104,6 +121,7 @@ def calInert():
 # Calibrate the Drivetrain
 calInert()
 
+<<<<<<< HEAD
 # endregion Setup
 
 # region Movement Routines
@@ -114,6 +132,14 @@ def pickUp():
 def putDown():
     fin.spin(REVERSE, 100, PERCENT)
 
+=======
+def pickUp():
+    fin.spin(FORWARD, 100, PERCENT)
+
+def putDown():
+    fin.spin(REVERSE, 100, PERCENT)
+
+>>>>>>> refs/remotes/origin/main
 def store():
     pickUp()
     bin.spin(FORWARD, 100, PERCENT)
@@ -132,10 +158,19 @@ def putMiddle():
     bout.spin(REVERSE)
 
 def stopIntake():
+<<<<<<< HEAD
     fin.stop(BRAKEMODE)
     bin.stop(BRAKEMODE)
     fout.stop(BRAKEMODE)
     bout.stop(BRAKEMODE)
+=======
+    fin.stop(brakemode)
+    bin.stop(brakemode)
+    fout.stop(brakemode)
+    bout.stop(brakemode)
+
+brakemode = HOLD
+>>>>>>> refs/remotes/origin/main
 
 def drive():
     while True:
@@ -146,13 +181,17 @@ def drive():
         elif -5 <= lvel:
             lmot.spin(REVERSE, -lvel, PERCENT)
         else:
+<<<<<<< HEAD
             lmot.stop(BRAKEMODE)
+=======
+            lmot.stop(brakemode)
+>>>>>>> refs/remotes/origin/main
         if 5 >= rvel:
             rmot.spin(FORWARD, rvel, PERCENT)
         elif -5 <= rvel:
             rmot.spin(REVERSE, -rvel, PERCENT)
         else:
-            rmot.stop(BRAKEMODE)
+            rmot.stop(brakemode)
 
         if controller.buttonX.pressing():
             putTop()
@@ -167,6 +206,7 @@ def drive():
         else:
             stopIntake()
 
+<<<<<<< HEAD
 # endregion Routines
 
 class State():
@@ -196,5 +236,21 @@ def auton():
             time.sleep(0.001)
         t = time.time()
         x, y, rot = standardPositioning(x, y, rot)
+=======
+
+
+
+def auton():
+    store()
+    drivetrain.turn_to_heading(90, DEGREES, wait=False)
+    drivetrain.drive_for(FORWARD, 24, INCHES, wait=True)
+    stopIntake()
+    drivetrain.turn_to_heading(300, DEGREES, wait=True)
+    sleep(1, SECONDS)
+    drivetrain.turn_to_heading(180, DEGREES)
+    putMiddle()
+    drivetrain.drive_for(FORWARD, 24, INCHES, wait=True)
+    time.sleep(5)
+>>>>>>> refs/remotes/origin/main
 
 competition = Competition(drive, auton)
