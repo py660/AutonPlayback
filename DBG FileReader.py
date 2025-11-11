@@ -45,10 +45,13 @@ print("\033[2J")
 # 
 # ------------------------------------------
 
-fin = open("sequence0.txt", "r")
+SAVE_SLOT = 0
+WINDOW_SIZE = 10
+
+fin = open(f"sequence{SAVE_SLOT}.txt", "r")
 data = fin.readlines()
 fin.close()
-groups = [data[x:x+10] for x in range(0, len(data))] # the 10 in "x+10" controls the buffer size
+groups = [data[x:x+WINDOW_SIZE] for x in range(0, len(data))] # the 10 in "x+10" controls the buffer size
 for group in groups:
     brain.screen.clear_screen()
     brain.screen.set_cursor(1,1)

@@ -41,7 +41,6 @@ print("\033[2J")
 "(Well, okay, add at your own risk, but you have been warned!)"
 
 """
-<<<<<<< HEAD
 Port 11_R: Left Front Motor - Green Gear Cartridge
 Port 20_R: Left Back
 Port 1: Right Front
@@ -52,42 +51,76 @@ Port 6: Lower Outside Intake
 Port 18: Lower Inside Intake
 Port 7_R: Upper Outside Intake
 Port 17_R: Upper Inside Intake
-=======
-Port 11: Left Front Motor - Green Gear Cartridge
-Port 20: Left Back Motor - Green Gear Cartridge
-Port 1: Right Front Motor - Green Gear Cartridge
-Port 10: Right Back Motor - Green Gear Cartridge
-Port 15: Inertial Sensor
-Port 6: Lower Outside Intake
-Port 18: Lower Inside Intake
-Port 7: Upper Outside Intake
-Port 17: Upper Inside Intake
->>>>>>> refs/remotes/origin/main
 """
 
 # ------------------------------------------
 # 
-# 	Project:      CWRV8.1
-#	Author:       py660, S.Wang
+# 	Project:      CWRV8
+#	Author:       py660
 #	Created:      Sep 5, 2025
-#	Description:  Customizable VEX Driving Framework
+#	Description:  VEX Driving Framework
 # 
 # ------------------------------------------
 
+__author__ = "py660"
+__copyright__ = "Copyright (C) 2025 py660"
+__version__ = "8.1"
+
 # endregion Preamble
 
-# region Setup & Config
+# region Setup & Settings
 
 import math
-SAVE_SLOT = 0
-BRAKEMODE = HOLD
-PIDMODE = 0 # 0: normal; 1: wheel odometry priority; 2: inertial priority
+import time
 
-<<<<<<< HEAD
-=======
+SAVE_SLOT = 0 # Underscore must remain for historical reasons
+
+# Driving dynamics (if it's plural, it's probably a dictionary)
+BOTCONSTANTS = { # Intrinsic properties of the robot
+    "wheelTravel": 329.16, # wheel's circumference; circumference of wheel
+    "trackWidth": 330.2, # robot width; distance between wheels on opposite sides
+    "wheelBase": 254, # robot length; distance between the front and back wheels' axles on the same side
+    "externalGearRatio": 1 # One revolution of the motor is how many revolutions of the wheel?
+}
+BRAKEMODE = HOLD # COAST = no resistance; BRAKE = short the + and - leads of the motor, aka regenerative braking; HOLD = use encoder to counter rotation
+POWERCOEFS = { # Manual correction of varying motor strengths
+    "left": 1.0,
+    "right": 1.0
+}
+LERPCOEFS = { # How smoothed out steering should be; used as skid prevention
+    "drive": 0.85,
+    "auton": 0.25
+}
+AUTONPOWERCOEF = 0.4 # Autonomous speed restriction, based on normal operating speed
+
+# Autonomous odometry (position tracking)
+ODOMMODE = 0 # Which sensor to trust more: 0=normal; 1=wheel encoder priority
+STARTPOS = { # Starting position of robot during calibration
+    "x": 0, # Remember, the origin is at the center of the playing field
+    "y": 0, # The units are millimeters, always
+    "heading": 0 # Degrees clockwise from vertical/+y direction (0<=theta<360)
+}
+
+# Autonomous PID (movement algorithm)
+DRIVEPIDMODE = 0b100 # Path-following PID module enable/disable flags; bits: 2=Proportional, 1=Integral, 0=Derivative Modules
+DRIVEPIDCOEFS = { # Path-following PID controller settings
+    "proportional": 0,
+    "integral": 0,
+    "derivative": 0
+}
+TURNPIDMODE = 0b100 # Turn-in-place PID module enable/disable flags; bits: 2=Proportional, 1=Integral, 0=Derivative Modules
+TURNPIDCOEFS = { # Turn-in-place PID controller settings
+    "proportional": 0,
+    "integral": 0,
+    "derivative": 0
+}
+
+# Tempvars
+ldrivelerp = 0
+rdrivelerp = 0
+
 
 # Devices
->>>>>>> refs/remotes/origin/main
 lfmot = Motor(Ports.PORT11, GearSetting.RATIO_18_1, True)
 lbmot = Motor(Ports.PORT20, GearSetting.RATIO_18_1, True)
 lmot = MotorGroup(lfmot, lbmot)
@@ -95,7 +128,7 @@ rfmot = Motor(Ports.PORT1, GearSetting.RATIO_18_1, False)
 rbmot = Motor(Ports.PORT10, GearSetting.RATIO_18_1, False)
 rmot = MotorGroup(rfmot, rbmot)
 inert = Inertial(Ports.PORT15)
-drivetrain = SmartDrive(lmot, rmot, inert, 329.16, 330.2, 254, MM, 1) # 3rd arg used to be 319.16; formula is D * pi * 25.4
+drivetrain = SmartDrive(lmot, rmot, inert, units=MM, **BOTCONSTANTS) # 4th arg used to be 319.16 (idk why); formula is D * pi * 25.4
 controller = Controller(PRIMARY)
 
 fin = Motor(Ports.PORT6, GearSetting.RATIO_18_1, False)
@@ -106,22 +139,22 @@ bout = Motor(Ports.PORT17, GearSetting.RATIO_18_1, True)
 def calInert():
     brain.screen.print("Calibrating inertial sensor...")
     brain.screen.next_row()
-    brain.screen.print("Please make sure the robot is facing towards heading 0.")
+    brain.screen.print("Please make sure the robot is configured at the specified starting position.")
     brain.screen.next_row()
     brain.screen.print("Do not move the robot until calibration is complete!")
     inert.calibrate()
     sleep(200, MSEC)
     while inert.is_calibrating(): sleep(25, MSEC)
-    drivetrain.set_heading(0)
+    inert.set_heading(STARTPOS.get("heading", 0))
+    drivetrain.set_heading(STARTPOS.get("heading", 0))
     lmot.reset_position()
     rmot.reset_position()
     brain.screen.clear_screen()
     brain.screen.set_cursor(1, 1)
 
-# Calibrate the Drivetrain
+# Calibrate sensors
 calInert()
 
-<<<<<<< HEAD
 # endregion Setup
 
 # region Movement Routines
@@ -132,14 +165,6 @@ def pickUp():
 def putDown():
     fin.spin(REVERSE, 100, PERCENT)
 
-=======
-def pickUp():
-    fin.spin(FORWARD, 100, PERCENT)
-
-def putDown():
-    fin.spin(REVERSE, 100, PERCENT)
-
->>>>>>> refs/remotes/origin/main
 def store():
     pickUp()
     bin.spin(FORWARD, 100, PERCENT)
@@ -158,99 +183,127 @@ def putMiddle():
     bout.spin(REVERSE)
 
 def stopIntake():
-<<<<<<< HEAD
     fin.stop(BRAKEMODE)
     bin.stop(BRAKEMODE)
     fout.stop(BRAKEMODE)
     bout.stop(BRAKEMODE)
-=======
-    fin.stop(brakemode)
-    bin.stop(brakemode)
-    fout.stop(brakemode)
-    bout.stop(brakemode)
 
-brakemode = HOLD
->>>>>>> refs/remotes/origin/main
+def ldrive(speed, lerp):
+    global ldrivelerp
+    ldrivelerp += (speed - ldrivelerp) * lerp
+    #controller.screen.set_cursor(1, 1)
+    #controller.screen.print("Lerp: {:.2f}".format(ldrivelerp))
+    if abs(ldrivelerp) < 0.01:
+        ldrivelerp = 0
+    if ldrivelerp == 0:
+        lmot.stop(BRAKEMODE)
+    lmot.spin(FORWARD if ldrivelerp > 0 else REVERSE, abs(ldrivelerp * 100)*POWERCOEFS.get("left", 1), PERCENT)
+
+def rdrive(speed, lerp):
+    global rdrivelerp
+    rdrivelerp += (speed - rdrivelerp) * lerp
+    if abs(rdrivelerp) < 0.01:
+        rdrivelerp = 0
+    if rdrivelerp == 0:
+        rmot.stop(BRAKEMODE)
+    rmot.spin(FORWARD if rdrivelerp > 0 else REVERSE, abs(rdrivelerp * 100)*POWERCOEFS.get("right", 1), PERCENT)
+
 
 def drive():
     while True:
         lvel = controller.axis3.position()
         rvel = controller.axis2.position()
-        if 5 >= lvel:
-            lmot.spin(FORWARD, lvel, PERCENT)
-        elif -5 <= lvel:
-            lmot.spin(REVERSE, -lvel, PERCENT)
+        if -5 <= lvel <= 5:
+            #lmot.stop(BRAKEMODE)
+            ldrive(0, LERPCOEFS.get("drive", 1))
         else:
-<<<<<<< HEAD
-            lmot.stop(BRAKEMODE)
-=======
-            lmot.stop(brakemode)
->>>>>>> refs/remotes/origin/main
-        if 5 >= rvel:
-            rmot.spin(FORWARD, rvel, PERCENT)
-        elif -5 <= rvel:
-            rmot.spin(REVERSE, -rvel, PERCENT)
+            ldrive(lvel/100, LERPCOEFS.get("drive", 1))
+        if -5 <= rvel <= 5:
+            #rmot.stop(BRAKEMODE)
+            rdrive(0, LERPCOEFS.get("drive", 1))
         else:
-            rmot.stop(brakemode)
+            rdrive(rvel/100, LERPCOEFS.get("drive", 1))
 
-        if controller.buttonX.pressing():
+        if controller.buttonX.pressing() or controller.buttonL1.pressing():
             putTop()
-        elif controller.buttonY.pressing():
+        elif controller.buttonY.pressing() or controller.buttonL2.pressing():
             putMiddle()
-        elif controller.buttonA.pressing():
+        elif controller.buttonA.pressing() or (controller.buttonR1.pressing() and controller.buttonR2.pressing()):
             store()
-        elif controller.buttonB.pressing():
+        elif controller.buttonB.pressing() or controller.buttonR1.pressing():
             pickUp()
-        elif controller.buttonDown.pressing():
+        elif controller.buttonDown.pressing() or controller.buttonR2.pressing():
             putDown()
         else:
             stopIntake()
 
-<<<<<<< HEAD
 # endregion Routines
 
+# region Autonomous Routines
 class State():
-    def __init__(self):
-        self.x = 0
-        self.y = 0
-        self.rot = 0
+    def __init__(self, x=0, y=0, heading=0):
+        self.x = x
+        self.y = y
+        self.rot = heading
 
-        self.l = 0
-        self.r = 0
-        self.rot = 0
+        # Tempvars
+        self.l = self.r = 0
+        self.dl = self.dr = self.drot = 0
 
 polarToRect = lambda r, theta: (r*math.cos(math.radians(theta)), r*math.sin(math.radians(theta)))
 
-def consumeData():
-    l = 
+def consumeData(state):
+    state.dl = lmot.position(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - state.l
+    state.l += state.dl
+    state.dr = rmot.position(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - state.r
+    state.r += state.dr
+    state.drot = inert.heading(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - state.rot
+    state.rot += state.drot
 
-def standardPositioning(x, y, rot):
-    # Sensor readings
-    l, r, rot = consumeData()
+def trackOdometry(state, mode):
+    r = theta = 0
+    if mode == 0: # Default odometry
+        r = (state.dl + state.dr)/2
+        theta = state.drot
+    if mode == 1: # Wheel encoder priority
+        r = (state.dl + state.dr)/2
+        theta = 180*(state.dl - state.dr)/(math.pi*BOTCONSTANTS.get("trackWidth", 320))
+    #if mode == 2: # Inertial accelerometer priority
+    #    rGivenL = state.dl * 
+    #    r = state.drot*
+    #    theta = state.drot
+    dx, dy = polarToRect(r, state.rot + theta/2)
+    state.x += dx
+    state.y += dy
 
-def auton():
+def auton(override=False):
     t = time.time()
-    state = State()
-    while competition.is_autonomous:
-        while time.time()-t<0.01:
-            time.sleep(0.001)
+    state = State(**STARTPOS)
+    while override or (competition.is_autonomous() and competition.is_enabled()):
+        if override:
+            lvel = controller.axis3.position() # -100<=lvel<=100
+            rvel = controller.axis2.position()
+            if -5 <= lvel <= 5:
+                #lmot.stop(BRAKEMODE)
+                ldrive(0, LERPCOEFS.get("auton", 1))
+            else:
+                ldrive(lvel/100*AUTONPOWERCOEF, LERPCOEFS.get("auton", 1))
+            if -5 <= rvel <= 5:
+                #rmot.stop(BRAKEMODE)
+                rdrive(0, LERPCOEFS.get("auton", 1))
+            else:
+                rdrive(rvel/100*AUTONPOWERCOEF, LERPCOEFS.get("auton", 1))
+
+        #while time.time()-t<0.01:
+        #    time.sleep(0.001)
         t = time.time()
-        x, y, rot = standardPositioning(x, y, rot)
-=======
+        consumeData(state)
+        trackOdometry(state, ODOMMODE)
+        #brain.screen.clear_screen()
+        controller.screen.set_cursor(1, 1)
+        controller.screen.print("X: {:.2f} Y: {:.2f} R: {:.2f}".format(state.x, state.y, state.rot))
 
+# endregion Autonomous Routines
 
-
-def auton():
-    store()
-    drivetrain.turn_to_heading(90, DEGREES, wait=False)
-    drivetrain.drive_for(FORWARD, 24, INCHES, wait=True)
-    stopIntake()
-    drivetrain.turn_to_heading(300, DEGREES, wait=True)
-    sleep(1, SECONDS)
-    drivetrain.turn_to_heading(180, DEGREES)
-    putMiddle()
-    drivetrain.drive_for(FORWARD, 24, INCHES, wait=True)
-    time.sleep(5)
->>>>>>> refs/remotes/origin/main
-
+#auton(True)
 competition = Competition(drive, auton)
