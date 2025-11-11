@@ -77,17 +77,17 @@ SAVE_SLOT = 0 # Underscore must remain for historical reasons
 
 # Driving dynamics (if it's plural, it's probably a dictionary)
 BOTCONSTANTS = { # Intrinsic properties of the robot
-    "wheelTravel": 329.16, # wheel's circumference; circumference of wheel
+    "wheelTravel": 329.16, # wheel's circumference in mm
     "trackWidth": 330.2, # robot width; distance between wheels on opposite sides
     "wheelBase": 254, # robot length; distance between the front and back wheels' axles on the same side
     "externalGearRatio": 1 # One revolution of the motor is how many revolutions of the wheel?
 }
 BRAKEMODE = HOLD # COAST = no resistance; BRAKE = short the + and - leads of the motor, aka regenerative braking; HOLD = use encoder to counter rotation
-POWERCOEFS = { # Manual correction of varying motor strengths
+POWERCOEFS = { # Manual correction of potential deviations in motor efficiency
     "left": 1.0,
     "right": 1.0
 }
-LERPCOEFS = { # How smoothed out steering should be; used as skid prevention
+LERPCOEFS = { # How smoothed out steering should be; used for skid prevention
     "drive": 0.85,
     "auton": 0.25
 }
@@ -102,15 +102,13 @@ STARTPOS = { # Starting position of robot during calibration
 }
 
 # Autonomous PID (movement algorithm)
-DRIVEPIDMODE = 0b100 # Path-following PID module enable/disable flags; bits: 2=Proportional, 1=Integral, 0=Derivative Modules
 DRIVEPIDCOEFS = { # Path-following PID controller settings
-    "proportional": 0,
+    "proportional": 0, # 0 for disabled
     "integral": 0,
     "derivative": 0
 }
-TURNPIDMODE = 0b100 # Turn-in-place PID module enable/disable flags; bits: 2=Proportional, 1=Integral, 0=Derivative Modules
 TURNPIDCOEFS = { # Turn-in-place PID controller settings
-    "proportional": 0,
+    "proportional": 0, # 0 for disabled
     "integral": 0,
     "derivative": 0
 }
