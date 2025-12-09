@@ -1,8 +1,8 @@
 import json
 fname = input("File path/name? ")
 out = []
-fin = open(fname, "r")
-data = fin.read()
+fin = open(fname, "rb")
+data = fin.read().decode('utf-8', errors='ignore')
 pathdata = json.loads(data.split("#PATH.JERRYIO-DATA ")[-1].split("#PATH.JERRYIO-DATA\0")[-1])
 path = pathdata["paths"][0]["segments"]
 for rawsegment in path:
