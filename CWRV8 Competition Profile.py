@@ -35,6 +35,11 @@ print("\033[2J")
 
 #endregion VEXcode Generated Robot Configuration
 
+RIGHT = 0; LEFT = 1
+
+# Left/Right Auton:
+AUTONMODE = RIGHT
+
 # region Preamble
 
 "!!!WARNING: DO NOT ADD ANY DEVICES USING THE GUI MENU!!!"
@@ -53,18 +58,32 @@ Port 7_R: Upper Outside Intake
 Port 17_R: Upper Inside Intake
 """
 
-# ------------------------------------------
-# 
-# 	Project:      CWRV8
-#	Author:       py660
-#	Created:      Sep 5, 2025
-#	Description:  VEX Driving Framework
-# 
-# ------------------------------------------
+#
+#
+#                ██████╗██╗    ██╗██████╗ ██╗   ██╗ █████╗                                 
+#               ██╔════╝██║    ██║██╔══██╗██║   ██║██╔══██╗                                
+#               ██║     ██║ █╗ ██║██████╔╝██║   ██║╚█████╔╝                                
+#               ██║     ██║███╗██║██╔══██╗╚██╗ ██╔╝██╔══██╗                                
+#               ╚██████╗╚███╔███╔╝██║  ██║ ╚████╔╝ ╚█████╔╝                                
+#                ╚═════╝ ╚══╝╚══╝ ╚═╝  ╚═╝  ╚═══╝   ╚════╝     
+#
+#
+#    o     o .oPYo.  o    o           oooooo   o     o  .oPYo. .oPYo. 
+#    8     8 8.      `b  d'           8        8     8  8   `8 8    8 
+#    8     8 `boo     `bd'     o    o 8pPYo.   8     8 o8YooP' 8      
+#    `b   d' .P       .PY.     Y.  .P     `8   `b   d'  8   `b 8      
+#     `b d'  8       .P  Y.    `b..d'     .P    `b d'   8    8 8    8 
+#      `8'   `YooP' .P    Y.    `YP'  `YooP'     `8'    8    8 `YooP' 
+#    :::..::::.....:..::::..:::::...:::.....::::::..::::..:::..:.....:
+#    :::::::::: CWRV8 AutonPlayback - VEX Driving Framework ::::::::::
+#    :::::::::::: https://github.com/py660/AutonPlayback :::::::::::::
+#    :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#        
+#
 
 __author__ = "py660"
 __copyright__ = "Copyright (C) 2025 py660"
-__version__ = "8.1"
+__version__ = "8.2"
 
 # endregion Preamble
 
@@ -73,8 +92,6 @@ __version__ = "8.1"
 import math
 import time
 
-SAVE_SLOT = 0 # Underscore must remain for historical reasons
-
 # Driving dynamics (if it's plural, it's probably a dictionary)
 BOTCONSTANTS = { # Intrinsic properties of the robot
     "wheelTravel": 329.16, # wheel's circumference in mm
@@ -82,40 +99,21 @@ BOTCONSTANTS = { # Intrinsic properties of the robot
     "wheelBase": 254, # robot length; distance between the front and back wheels' axles on the same side
     "externalGearRatio": 1 # One revolution of the motor is how many revolutions of the wheel?
 }
-BRAKEMODE = HOLD # COAST = no resistance; BRAKE = short the + and - leads of the motor, aka regenerative braking; HOLD = use encoder to counter rotation
-POWERCOEFS = { # Manual correction of potential deviations in motor efficiency
-    "left": 1.0,
-    "right": 1.0
+BRAKEMODE = COAST # COAST = no resistance; BRAKE = short the + and - leads of the motor, aka regenerative braking; HOLD = use encoder to counter rotation
+POWERCOEFS = { # Manual correction of potential deviations in motor efficiency; a trivial difference in speed is achieved at 85-127
+    "left": 0.85,
+    "right": 0.85
 }
-LERPCOEFS = { # How smoothed out steering should be; used for skid prevention
+LERPCOEFS = { # How smooth the acceleration should be; used for slip prevention
     "drive": 0.85,
-    "auton": 0.25
+    "auton": 1 # UNUSED 0.25; isolated tracking wheels remove the need for smoothing
 }
-AUTONPOWERCOEF = 0.4 # Autonomous speed restriction, based on normal operating speed
-
-# Autonomous odometry (position tracking)
-ODOMMODE = 0 # Which sensor to trust more: 0=normal; 1=wheel encoder priority
-STARTPOS = { # Starting position of robot during calibration
-    "x": 0, # Remember, the origin is at the center of the playing field
-    "y": 0, # The units are millimeters, always
-    "heading": 0 # Degrees clockwise from vertical/+y direction (0<=theta<360)
-}
-
-# Autonomous PID (movement algorithm)
-DRIVEPIDCOEFS = { # Path-following PID controller settings
-    "proportional": 0, # 0 for disabled
-    "integral": 0,
-    "derivative": 0
-}
-TURNPIDCOEFS = { # Turn-in-place PID controller settings
-    "proportional": 0, # 0 for disabled
-    "integral": 0,
-    "derivative": 0
-}
+AUTONPOWERCOEF = 0.8 # Autonomous speed restriction; scaled from normal operating speed in addition to POWERCOEFS
 
 # Tempvars
 ldrivelerp = 0
 rdrivelerp = 0
+inputmode = 0
 
 
 # Devices
@@ -134,8 +132,8 @@ bin = Motor(Ports.PORT18, GearSetting.RATIO_18_1, False)
 fout = Motor(Ports.PORT7, GearSetting.RATIO_18_1, True)
 bout = Motor(Ports.PORT17, GearSetting.RATIO_18_1, True)
 
-def calInert():
-    brain.screen.print("Calibrating inertial sensor...")
+def calibrate():
+    brain.screen.print("Calibrating sensors...")
     brain.screen.next_row()
     brain.screen.print("Please make sure the robot is configured at the specified starting position.")
     brain.screen.next_row()
@@ -145,39 +143,57 @@ def calInert():
     while inert.is_calibrating(): sleep(25, MSEC)
     inert.set_heading(STARTPOS.get("heading", 0))
     drivetrain.set_heading(STARTPOS.get("heading", 0))
+    lenc.reset_position()
+    renc.reset_position()
     lmot.reset_position()
     rmot.reset_position()
     brain.screen.clear_screen()
     brain.screen.set_cursor(1, 1)
 
-# Calibrate sensors
-calInert()
+def flopInputMode():
+    global inputmode
+    inputmode = 1 - inputmode
+    controller.rumble(".")
+    controller.screen.clear_screen()
+    controller.screen.print("Input mode: {}".format("Two-Wheel Drive" if inputmode == 1 else "Throttle-Steering Drive"))
 
-# endregion Setup
+# Calibrate sensors
+calibrate()
+
+controller.buttonUp.pressed(flopInputMode)
+
+# endregion Setup & Settings
 
 # region Movement Routines
 
+def intakeSpeed(speed):
+    fin.set_velocity(speed, PERCENT)
+    fout.set_velocity(speed, PERCENT)
+    bin.set_velocity(speed, PERCENT)
+    bout.set_velocity(speed, PERCENT)
+
 def pickUp():
-    fin.spin(FORWARD, 100, PERCENT)
+    fin.spin(FORWARD)
 
 def putDown():
-    fin.spin(REVERSE, 100, PERCENT)
+    fin.spin(REVERSE)
 
 def store():
     pickUp()
-    bin.spin(FORWARD, 100, PERCENT)
-    fout.spin(REVERSE, 100, PERCENT)
-    bout.spin(FORWARD, 100, PERCENT)
+    bin.spin(FORWARD)
+    fout.spin(REVERSE)
+    bout.spin(FORWARD)
 
 def putTop():
     pickUp()
-    fout.spin(FORWARD, 100, PERCENT)
-    bin.spin(FORWARD, 100, PERCENT)
-    bout.spin(FORWARD, 100, PERCENT)
+    fout.spin(FORWARD)
+    bin.spin(FORWARD)
+    bout.spin(FORWARD)
 
 def putMiddle():
     pickUp()
     bin.spin(FORWARD)
+    fout.spin(FORWARD)
     bout.spin(REVERSE)
 
 def stopIntake():
@@ -186,7 +202,7 @@ def stopIntake():
     fout.stop(BRAKEMODE)
     bout.stop(BRAKEMODE)
 
-def ldrive(speed, lerp):
+def ldrive(speed, lerp): # Ignore that this lerp is clock-dependent for now (not a big issue)
     global ldrivelerp
     ldrivelerp += (speed - ldrivelerp) * lerp
     #controller.screen.set_cursor(1, 1)
@@ -206,20 +222,21 @@ def rdrive(speed, lerp):
         rmot.stop(BRAKEMODE)
     rmot.spin(FORWARD if rdrivelerp > 0 else REVERSE, abs(rdrivelerp * 100)*POWERCOEFS.get("right", 1), PERCENT)
 
-
 def drive():
+    intakeSpeed(100)
     while True:
         lvel = controller.axis3.position()
-        rvel = controller.axis2.position()
-        if -5 <= lvel <= 5:
-            #lmot.stop(BRAKEMODE)
-            ldrive(0, LERPCOEFS.get("drive", 1))
+        if inputmode == 1:
+            rvel = controller.axis1.position()
+        else:
+            rvel = controller.axis2.position()
+        lvel = lvel if abs(lvel) > 5 else 0
+        rvel = rvel if abs(rvel) > 5 else 0
+        if inputmode == 1:
+            ldrive((lvel+rvel)/100, LERPCOEFS.get("drive", 1))
+            rdrive((lvel-rvel)/100, LERPCOEFS.get("drive", 1))
         else:
             ldrive(lvel/100, LERPCOEFS.get("drive", 1))
-        if -5 <= rvel <= 5:
-            #rmot.stop(BRAKEMODE)
-            rdrive(0, LERPCOEFS.get("drive", 1))
-        else:
             rdrive(rvel/100, LERPCOEFS.get("drive", 1))
 
         if controller.buttonX.pressing() or controller.buttonL1.pressing():
@@ -235,73 +252,31 @@ def drive():
         else:
             stopIntake()
 
-# endregion Routines
+# endregion Movement Routines
 
-# region Autonomous Routines
-class State():
-    def __init__(self, x=0, y=0, heading=0):
-        self.x = x
-        self.y = y
-        self.rot = heading
+# region Temp Auton
 
-        # Tempvars
-        self.l = self.r = 0
-        self.dl = self.dr = self.drot = 0
+def auton():
+    intakeSpeed(40)
+    drivetrain.set_drive_velocity(100*AUTONPOWERCOEF, PERCENT)
+    putTop()
+    drivetrain.drive_for(FORWARD, 1100, MM)
+    time.sleep(1.7)
+    stopIntake()
+    drivetrain.drive_for(REVERSE, 500, MM)
+    if AUTONMODE == 1:
+        drivetrain.turn_to_heading(0, DEGREES)
+    else:
+        drivetrain.turn_to_heading(180, DEGREES)
+    drivetrain.drive_for(FORWARD, 730, MM)
+    drivetrain.turn_to_heading(90, DEGREES)
+    drivetrain.drive_for(FORWARD, 150, MM)
+    intakeSpeed(80)
+    putTop()
+    drivetrain.drive_for(FORWARD, 50, MM)
+    time.sleep(2.75)
 
-polarToRect = lambda r, theta: (r*math.cos(math.radians(theta)), r*math.sin(math.radians(theta)))
-
-def consumeData(state):
-    state.dl = lmot.position(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - state.l
-    state.l += state.dl
-    state.dr = rmot.position(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - state.r
-    state.r += state.dr
-    state.drot = inert.heading(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - state.rot
-    state.rot += state.drot
-
-def trackOdometry(state, mode):
-    r = theta = 0
-    if mode == 0: # Default odometry
-        r = (state.dl + state.dr)/2
-        theta = state.drot
-    if mode == 1: # Wheel encoder priority
-        r = (state.dl + state.dr)/2
-        theta = 180*(state.dl - state.dr)/(math.pi*BOTCONSTANTS.get("trackWidth", 320))
-    #if mode == 2: # Inertial accelerometer priority
-    #    rGivenL = state.dl * 
-    #    r = state.drot*
-    #    theta = state.drot
-    dx, dy = polarToRect(r, state.rot + theta/2)
-    state.x += dx
-    state.y += dy
-
-def auton(override=False):
-    t = time.time()
-    state = State(**STARTPOS)
-    while override or (competition.is_autonomous() and competition.is_enabled()):
-        if override:
-            lvel = controller.axis3.position() # -100<=lvel<=100
-            rvel = controller.axis2.position()
-            if -5 <= lvel <= 5:
-                #lmot.stop(BRAKEMODE)
-                ldrive(0, LERPCOEFS.get("auton", 1))
-            else:
-                ldrive(lvel/100*AUTONPOWERCOEF, LERPCOEFS.get("auton", 1))
-            if -5 <= rvel <= 5:
-                #rmot.stop(BRAKEMODE)
-                rdrive(0, LERPCOEFS.get("auton", 1))
-            else:
-                rdrive(rvel/100*AUTONPOWERCOEF, LERPCOEFS.get("auton", 1))
-
-        #while time.time()-t<0.01:
-        #    time.sleep(0.001)
-        t = time.time()
-        consumeData(state)
-        trackOdometry(state, ODOMMODE)
-        #brain.screen.clear_screen()
-        controller.screen.set_cursor(1, 1)
-        controller.screen.print("X: {:.2f} Y: {:.2f} R: {:.2f}".format(state.x, state.y, state.rot))
-
-# endregion Autonomous Routines
+# endregion Temp Auton
 
 #auton(True)
 competition = Competition(drive, auton)

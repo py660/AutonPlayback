@@ -4,7 +4,7 @@
 		"json": 2
 	},
 	"project": {
-		"name": "CWRV8",
+		"name": "RIGHT CWRV8",
 		"description": "VRC Tech!",
 		"creationDate": "9/5/2025, 9:23:28 PM",
 		"platform": "V5",
@@ -12,7 +12,7 @@
 		"slot": 2,
 		"sdkVersion": "V5_1_0_1_25",
 		"python": {
-			"main": "CWRV8 AutonReader.py"
+			"main": "CWRV8 Competition Profile.py"
 		}
 	}
 }
