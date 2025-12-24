@@ -83,7 +83,7 @@ Port 17_R: Upper Inside Intake
 
 __author__ = "py660"
 __copyright__ = "Copyright (C) 2025 py660"
-__version__ = "8.2"
+__version__ = "8.3"
 
 # endregion Preamble
 
@@ -109,6 +109,12 @@ LERPCOEFS = { # How smooth the acceleration should be; used for slip prevention
     "auton": 1 # UNUSED 0.25; isolated tracking wheels remove the need for smoothing
 }
 AUTONPOWERCOEF = 0.8 # Autonomous speed restriction; scaled from normal operating speed in addition to POWERCOEFS
+
+STARTPOS = { # Starting pose of robot during calibration
+    "x": -1390, # Remember, the origin is at the center of the playing field
+    "y": -390, # The units are millimeters, always
+    "heading": 90 # Degrees clockwise from vertical/+y direction (0<=theta<360)
+}
 
 # Tempvars
 ldrivelerp = 0
@@ -143,8 +149,6 @@ def calibrate():
     while inert.is_calibrating(): sleep(25, MSEC)
     inert.set_heading(STARTPOS.get("heading", 0))
     drivetrain.set_heading(STARTPOS.get("heading", 0))
-    lenc.reset_position()
-    renc.reset_position()
     lmot.reset_position()
     rmot.reset_position()
     brain.screen.clear_screen()
@@ -254,7 +258,7 @@ def drive():
 
 # endregion Movement Routines
 
-# region Temp Auton
+# region Easy Auton
 
 def auton():
     intakeSpeed(40)
@@ -276,7 +280,7 @@ def auton():
     drivetrain.drive_for(FORWARD, 50, MM)
     time.sleep(2.75)
 
-# endregion Temp Auton
+# endregion Easy Auton
 
 #auton(True)
 competition = Competition(drive, auton)

@@ -52,8 +52,7 @@ Port 18: Lower Inside Intake
 Port 7_R: Upper Outside Intake
 Port 17_R: Upper Inside Intake
 
-3WP A & B: Left Optical Shaft Encoder
-3WP G & H: Right Optical Shaft Encoder
+3WP A & B: Right Optical Shaft Encoder
 """
 
 #
@@ -81,7 +80,7 @@ Port 17_R: Upper Inside Intake
 
 __author__ = "py660"
 __copyright__ = "Copyright (C) 2025 py660"
-__version__ = "8.2"
+__version__ = "8.3"
 
 # endregion Preamble
 
@@ -96,6 +95,8 @@ AUTONMODE = 0 # 0 = RIGHT; 1 = LEFT
 BOTCONSTANTS = { # Intrinsic properties of the robot
     "wheelTravel": 329.16, # wheel's circumference in mm
     "trackWidth": 330.2, # robot width; distance between wheels on opposite sides
+    "odomWheelTravel": 164.892, # odometry wheel's circumference in mm
+    "odomWidth": 163.576, # the distance between two wheels if you mirrored the odometry wheel onto the other axis; negative if odom wheel is on left side
     "wheelBase": 254, # robot length; distance between the front and back wheels' axles on the same side
     "externalGearRatio": 1 # One revolution of the motor is how many revolutions of the wheel?
 }
@@ -113,12 +114,12 @@ AUTONPOWERCOEF = 0.8 # Autonomous speed restriction; scaled from normal operatin
 # AUTON LOOP:
 #   1 -> Sense;     Sensor Data Collection
 #   2 -> Odom;      Odometry (outputs current v-pose)
-#   3 -> PreNav;    Path Planning and Adaptation (manages V-POSE objectives, aka. keyframes, given pre-planned spline and command-hybrid path)
+#   3 -> PreNav;    Path Planning and Adaptation (manages objectives (including V-POSE, ROT, CMD, etc), aka. keyframes, given pre-planned spline and command-hybrid path)
 #   4 -> Nav;       Path Following (turns current objective into live navigation instructions and determines v-pose error)
 #   5 -> PID;       Motor Controller (turns error into actions; outputs motor PWM with respect to error accumulation and its subsequent correction)
 
 # 1&2 Sense/Odom: Autonomous odometry (position tracking)
-ODOMMODE = 0b00 # Which sensor to trust more: 0=internal notor encoders/1=optical encoders; 0=normal/1=don't use inertial
+ODOMMODE = 0b10 # Which sensor to trust more: 0=internal notor encoders/1=optical encoder(s); 0=normal/1=don't use inertial
 STARTPOS = { # Starting pose of robot during calibration
     "x": -1390, # Remember, the origin is at the center of the playing field
     "y": -390, # The units are millimeters, always
@@ -132,10 +133,16 @@ VPOSEEPSILON = 60 # mm tolerance from a V-POSE objective's pos target to still b
 ROTEPSILON = 1 # deg tolerance from a ROT objective's rot target
 
 # 4 Nav: Planning (live navigation curve-creating) algorithm
+LOOKAHEAD = 0.7 # Don't change this
 
 # 5: Autonomous PID (navigation algorithm)
-PIDCOEFS = { # Motor controller PID settings
-    "proportional": 1, # 0 for disabled
+DRIVEPIDCOEFS = { # Motor controller PID settings
+    "proportional": 0.2, # 0 for disabled
+    "integral": 0,
+    "derivative": 0
+}
+TURNPIDCOEFS = { # (turn-in-place algorithm)
+    "proportional": 0.1,
     "integral": 0,
     "derivative": 0
 }
@@ -146,6 +153,7 @@ PIDCOEFS = { # Motor controller PID settings
 # best to stay within +-1750.
 
 # NOTE: (127*14 to convert from desmos coordinates to mm)
+# NOTE: This program deals in millimeters and headings in clockwise degrees. Thus, remember to use math.atan2(x, y) and math.radians() when appropriate.
 
 
 # Tempvars
@@ -162,7 +170,6 @@ rfmot = Motor(Ports.PORT1, GearSetting.RATIO_18_1, False)
 rbmot = Motor(Ports.PORT10, GearSetting.RATIO_18_1, False)
 rmot = MotorGroup(rfmot, rbmot)
 inert = Inertial(Ports.PORT15)
-lenc = Encoder(brain.three_wire_port.g)
 renc = Encoder(brain.three_wire_port.a)
 drivetrain = SmartDrive(lmot, rmot, inert, units=MM, **BOTCONSTANTS) # 4th arg used to be 319.16 (idk why); formula is D * pi * 25.4
 controller = Controller(PRIMARY)
@@ -183,7 +190,7 @@ def calibrate():
     while inert.is_calibrating(): sleep(25, MSEC)
     inert.set_heading(STARTPOS.get("heading", 0))
     drivetrain.set_heading(STARTPOS.get("heading", 0))
-    lenc.reset_position()
+    #lenc.reset_position()
     renc.reset_position()
     lmot.reset_position()
     rmot.reset_position()
@@ -298,6 +305,7 @@ def drive():
 
 # region Math Dependencies
 polarToRect = lambda r, theta: Vector((r*math.cos(math.radians(theta)), r*math.sin(math.radians(theta))))
+rotate = lambda vec, theta: Vector((math.cos(theta)*vec.x + math.sin(theta)*vec.y, -math.sin(theta)*vec.x + math.cos(theta)*vec.y))
 class Vector(tuple):
     """Vectors without numpy."""
     def __init__(self, coord=(0,0)):
@@ -362,9 +370,6 @@ class VPoseObjective(Objective):
         self.vel = vel
         self.pos = pos
         self.rot = rot
-
-    def calculateError(self, state): #type (State)
-        pass
 
     def completed(self, state):
         return self.pos.dist(state.pos) <= VPOSEEPSILON
@@ -438,7 +443,7 @@ class Path():
                 elif left == "DELAY":
                     out.append(DelayObjective(int(right)))
                 else:
-                    raise ValueError("Invalid CMD \"{}\"!".format(line[0]))
+                    raise ValueError("Invalid CMD \"{}\"!".format(left))
             else:
                 raise ValueError("Unrecognized action \"{}\"!".format(line[0]))
         return out
@@ -450,8 +455,15 @@ class Path():
     
     @property
     def currentObjective(self): # type: () -> Objective | None
-        """Returns the first incomplete objective, or None if none exist."""
-        return self.objectives[0]
+        """Returns the first objective, or None if none exist."""
+        return self.objectives[0] if len(self.objectives) > 0 else None
+    
+    def advanceObjectives(self, state): #type: (State) -> None
+        """Discards completed objectives from start of queue; activates new objectives as necessary."""
+        while self.currentObjective:
+            self.currentObjective.activate()
+            if self.currentObjective.completed(state):
+                self.objectives.pop(0)
     
     @staticmethod
     def Bez(t, A, B, C, D): # type: (float, Vector, Vector, Vector, Vector) -> Vector
@@ -464,59 +476,138 @@ class Path():
         return (B - A)*3*(1-t)**2 + (C - B)*2*t*(1-t) + (D - C)*t**2
     
     @staticmethod
-    def HBez(t):
+    def HBez(t, A, va, vd, D): # type: (float, Vector, Vector, Vector, Vector) -> Vector
         """Hermite variant of connected cubic Bezier curves."""
-        pass
+        return Path.Bez(t, A, A+va/3, D-vd/3, D)
+    
+    @staticmethod
+    def HBezDer(t, A, va, vd, D): # type: (float, Vector, Vector, Vector, Vector) -> Vector
+        """First derivative of hermite varient of connected cubic bezier curves"""
+        return Path.BezDer(t, A, A+va/3, D-vd/3, D)
+
+
+class PID:
+    """Generic Proportional-Integral-Derivative controller."""
+    def __init__(self, proportional, integral, derivative): # type: (float, float, float) -> None
+        self.kp = proportional
+        self.ki = integral
+        self.kd = derivative
+        self._i = 0
+        self._d = 0
+        self._t = 0
+        self._dt = 0
+
+    def loop(self, err): # type: (float) -> float
+        if self._t == 0:
+            self._t = time.time()
+        dt = time.time() - self._t
+        self._t += dt
+        
+
+        p = self.kp * err
+
+        self._i += dt * err
+        i = self.ki * self._i
+
+        d = self.kd * (err - self._d) / dt
+        self._d = err
+
+        return p+i+d
+
 
 class State:
     """Current v-pose (velocity + position + rotation) of the robot."""
-    def __init__(self, x=0, y=0, heading=0, velocity=0): # type: (float, float, float, int) -> None
+    def __init__(self, x=0, y=0, heading=0, velocity=0, pathData=[]): # type: (float, float, float, int, list) -> None
         self.pos = Vector((x, y))
         self.rot = heading
         self.vel = velocity # Sensor Data
 
+        self.path = Path(pathData) # PreNav Ddata
+        self.drivePid = PID(**DRIVEPIDCOEFS)
+        self.turnPid = PID(**TURNPIDCOEFS)
+
         # Tempvars
-        self._l = self._r = 0
-        self._dl = self._dr = self._drot = 0
+        self._l = self._r = self._0 = 0
+        self._dl = self._dr = self._do = self._drot = 0
 
     def consumeData(self, mode): # type: (int) -> None
         """Consumes raw data from sensors."""
-        if mode == 0: # IME
+        self._drot = inert.heading(DEGREES) - self.rot
+        self.rot += self._drot
+        if mode & 0b10 == 0: # IME
             self._dl = lmot.position(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - self._l
             self._l += self._dl
             self._dr = rmot.position(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - self._r
             self._r += self._dr
-        else: # Optical encoders
-            self._dl = lenc.position(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - self._l
-            self._l += self._dl
-            self._dr = renc.position(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - self._r
-            self._r += self._dr
-        self._drot = inert.heading(DEGREES)/360*BOTCONSTANTS.get("wheelTravel", 300) - self.rot
-        self.rot += self._drot
-        self.vel = (lenc.velocity(DPS)/360*BOTCONSTANTS.get("wheelTravel", 300) + renc.velocity(DPS)/360*BOTCONSTANTS.get("wheelTravel", 300))/2
+            self.vel = (lmot.velocity(DPS)/360*BOTCONSTANTS.get("wheelTravel", 300) + rmot.velocity(DPS)/360*BOTCONSTANTS.get("wheelTravel", 300))/2
+        else: # Optical Encoder
+            self._do = renc.position(DEGREES)/360*BOTCONSTANTS.get("odomWheelTravel", 160) - self._o
+            self._o += self._do
+            self.vel = renc.velocity(DPS)/360*BOTCONSTANTS.get("odomWheelTravel", 160) - math.radians(self._drot)*BOTCONSTANTS.get("odomWidth", 160)/2
+        #self.vel = (lenc.velocity(DPS)/360*BOTCONSTANTS.get("wheelTravel", 300) + renc.velocity(DPS)/360*BOTCONSTANTS.get("wheelTravel", 300))/2
 
     def trackOdometry(self, mode): # type: (int) -> None
         """Calculates robot position given previously read sensor data."""
         r = theta = 0
-        if mode == 0: # Default odometry
+        if mode == 0b00: # Default odometry + IME
             r = (self._dl + self._dr)/2
             theta = self._drot
-        else: # Wheel encoder priority
+        elif mode == 0b01: # Wheel encoder priority + IME
             r = (self._dl + self._dr)/2
-            theta = 180*(self._dl - self._dr)/(math.pi*BOTCONSTANTS.get("trackWidth", 320))
+            theta = math.degrees((self._dl - self._dr)/BOTCONSTANTS.get("trackWidth", 320))
+        elif mode == 0b10: # Default odometry + Optical Encoder
+            r = (self._do) - math.radians(self._drot)*BOTCONSTANTS.get("odomWidth", 160)/2
+            theta = self._drot
+        else: # You can't have odometry using just the wheel encoders
+            raise Exception("Too few encoders to use encoder priority mode; minimum 2 required.")
+
         #if mode == 2: # Inertial accelerometer priority
         #    rGivenL = state.dl * 
         #    r = state.drot*
         #    theta = state.drot
         dpos = polarToRect(r, self.rot + theta/2)
         self.pos = self.pos + dpos
+    
+    def _calcNaviBezDer(self, t): #type: (float) -> Vector
+        """Calculates real-time navigational bezier."""
+        if not isinstance(self.path.currentObjective, VPoseObjective):
+            return Vector()
+        return Path.HBezDer(t, self.pos, Vector(), polarToRect(1, self.path.currentObjective.rot)*350, self.path.currentObjective.pos)
+    
+    def actionNavigation(self):
+        """Acts on the current objective."""
+        if isinstance(self.path.currentObjective, VPoseObjective):
+            Ts = self._calcNaviBezDer(LOOKAHEAD)
+            Ttheta = (Ts.theta - self.rot) % math.tau
+            driveDiff = self.drivePid.loop(Ttheta)
+            if driveDiff >= 0:
+                ldrive(1, LERPCOEFS.get("auton", 1))
+                rdrive(1-driveDiff, LERPCOEFS.get("auton", 1))
+            else:
+                ldrive(1+driveDiff, LERPCOEFS.get("auton", 1))
+                rdrive(1, LERPCOEFS.get("auton", 1))
+        elif isinstance(self.path.currentObjective, RotationObjective):
+            Ttheta = (self.path.currentObjective.rot - self.rot) % math.tau
+            turnDiff = self.turnPid.loop(Ttheta)
+            ldrive(turnDiff, LERPCOEFS.get("auton", 1))
+            rdrive(-turnDiff, LERPCOEFS.get("auton", 1))
+        elif isinstance(self.path.currentObjective, RoutineObjective):
+            pass
+        elif isinstance(self.path.currentObjective, DelayObjective):
+            pass
+        else:
+            pass
+
 
 def auton(override=False):
     t = time.time()
     path = None
     #f = open("spline0.txt", "r")
     #Path()
-    state = State(**STARTPOS)
+    fin = open("spline" + str(SAVE_SLOT) + ".txt", "r")
+    data = fin.read()
+    fin.close()
+    state = State(**STARTPOS, pathData=Path.parse(data))
     while override or (competition.is_autonomous() and competition.is_enabled()):
         if override:
             lvel = controller.axis3.position()
@@ -533,8 +624,11 @@ def auton(override=False):
         #while time.time()-t<0.01:
         #    time.sleep(0.001)
         t += (td := time.time() - t)
-        state.consumeData(ODOMMODE & 0b10)
-        state.trackOdometry(ODOMMODE & 0b01)
+        state.consumeData(ODOMMODE)
+        state.trackOdometry(ODOMMODE)
+        state.path.advanceObjectives(state)
+        if not override:
+            state.actionNavigation()
 
         controller.screen.set_cursor(1, 1)
         controller.screen.print("X: {:.2f} Y: {:.2f} R: {:.2f}".format(state.pos[0], state.pos[1], state.rot))
