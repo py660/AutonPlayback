@@ -52,7 +52,7 @@ Port 18: Lower Inside Intake
 Port 7_R: Upper Outside Intake
 Port 17_R: Upper Inside Intake
 
-3WP A & B: Right Optical Shaft Encoder
+3WP A & B: Right Optical Shaft Encoder (opt.)
 """
 
 #

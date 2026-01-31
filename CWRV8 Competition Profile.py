@@ -56,6 +56,9 @@ Port 6: Lower Outside Intake
 Port 18: Lower Inside Intake
 Port 7_R: Upper Outside Intake
 Port 17_R: Upper Inside Intake
+
+3WP G: Intake Scoop Solenoid
+3WP H: Long Goal Pusher Solenoid
 """
 
 #
