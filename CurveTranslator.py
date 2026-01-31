@@ -14,16 +14,18 @@ for rawsegment in path:
     else:
         raise Exception("Path data includes a segment with only one point ?!?!?")
     
-fout = open("spline0.txt", "w")
-fout.write("\n".join(out))
-print("Done!")
-
-""" # Format:
-# Comment Blah Blah
-CURVE: [START_POINT] | [CTRL_POINT1] | [CTRL_POINT1] | [END_POINT]
-# Ex. CURVE: (2.23,0.34) | (3.35,-2) | (2.3,5.4) | (6.5)
-CMD: SET_VELOCITY = {1-100 (%)}
-CMD: TURN_HEADING = {0-359 (deg)}
-CMD: ROUTINE = {PICK_UP, PUT_DOWN, STORE, PUT_TOP, PUT_MIDDLE, STOP_INTAKE}
-CMD: DELAY = {0-INF (msec)}
+preramble = """# Format:
+# # Comment Blah Blah
+# CURVE: [START_POINT] | [CTRL_POINT1] | [CTRL_POINT1] | [END_POINT]
+# # Ex. CURVE: (2.23,0.34) | (3.35,-2) | (2.3,5.4) | (6.5)
+# CMD: SET_VELOCITY = {1-100 (%)}
+# CMD: TURN_HEADING = {0-359 (deg)}
+# CMD: ROUTINE = {PICK_UP, PUT_DOWN, PUT_TOP, PUT_MIDDLE, STOP_INTAKE}
+# CMD: DELAY = {0-INF (msec)}
+# CMD: DRIVE = {+/- DISTANCE (mm)}
+# CMD: PRINT = Anything you put here will be printed to the brain
 """
+
+fout = open("spline0.txt", "w")
+fout.write(preramble + "\n".join(out))
+print("Done!")

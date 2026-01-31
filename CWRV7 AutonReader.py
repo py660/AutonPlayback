@@ -437,7 +437,7 @@ def vexcode_driver_function():
 # register the competition functions
 competition = Competition( vexcode_driver_function, vexcode_auton_function )
 #vexcode_auton_function()
-# Yo Yo Yo What's Up Saxe Middle School?!
+# Yo Yo Yo What's Up XXXX XXXXXX School?!
 # what's up!!
 
 

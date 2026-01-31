@@ -89,8 +89,6 @@ __version__ = "8.3"
 import math
 import time
 
-AUTONMODE = 0 # 0 = RIGHT; 1 = LEFT
-
 # Driving dynamics (if it's plural, it's probably a dictionary)
 BOTCONSTANTS = { # Intrinsic properties of the robot
     "wheelTravel": 329.16, # wheel's circumference in mm
@@ -119,7 +117,7 @@ AUTONPOWERCOEF = 0.8 # Autonomous speed restriction; scaled from normal operatin
 #   5 -> PID;       Motor Controller (turns error into actions; outputs motor PWM with respect to error accumulation and its subsequent correction)
 
 # 1&2 Sense/Odom: Autonomous odometry (position tracking)
-ODOMMODE = 0b10 # Which sensor to trust more: 0=internal notor encoders/1=optical encoder(s); 0=normal/1=don't use inertial
+ODOMMODE = 0b00 # Which sensor to trust more: 0=internal notor encoders/1=optical encoder(s); 0=normal/1=don't use inertial
 STARTPOS = { # Starting pose of robot during calibration
     "x": -1390, # Remember, the origin is at the center of the playing field
     "y": -390, # The units are millimeters, always
@@ -128,7 +126,7 @@ STARTPOS = { # Starting pose of robot during calibration
 
 # 3 PreNav: Spline (path-creating) configuration
 SAVE_SLOT = 0 # Underscore must remain for historical reasons
-SUBDIVRESOLUTION = 70 # mm (+- 1) between each recorded point in a path
+SUBDIVRESOLUTION = 150 # mm (+- 1) between each recorded point in a path
 VPOSEEPSILON = 60 # mm tolerance from a V-POSE objective's pos target to still be acceptably accomplished
 ROTEPSILON = 1 # deg tolerance from a ROT objective's rot target
 
@@ -152,8 +150,13 @@ TURNPIDCOEFS = { # (turn-in-place algorithm)
 # fall within [-1778,1778] for both x and y, although it's
 # best to stay within +-1750.
 
-# NOTE: (127*14 to convert from desmos coordinates to mm)
-# NOTE: This program deals in millimeters and headings in clockwise degrees. Thus, remember to use math.atan2(x, y) and math.radians() when appropriate.
+# NOTE: [-127,127]*14 to convert from desmos coordinates to mm
+# NOTE: This program deals in millimeters and headings in
+#       clockwise degrees (OH NO, NOTHING IS SI NOW!!! CHAOS!!!).
+#       Thus, remember to use math.atan2(x, y) and math.radians()
+#       when appropriate.
+# NOTE: https://www.desmos.com/calculator/bfbvcurnvm
+
 
 
 # Tempvars
@@ -171,7 +174,7 @@ rbmot = Motor(Ports.PORT10, GearSetting.RATIO_18_1, False)
 rmot = MotorGroup(rfmot, rbmot)
 inert = Inertial(Ports.PORT15)
 renc = Encoder(brain.three_wire_port.a)
-drivetrain = SmartDrive(lmot, rmot, inert, units=MM, **BOTCONSTANTS) # 4th arg used to be 319.16 (idk why); formula is D * pi * 25.4
+drivetrain = SmartDrive(lmot, rmot, inert, units=MM, wheelTravel=BOTCONSTANTS["wheelTravel"], wheelBase=BOTCONSTANTS["wheelBase"], trackWidth=BOTCONSTANTS["trackWidth"], externalGearRatio=BOTCONSTANTS["externalGearRatio"]) # **BOTCONSTANTS) # 4th arg used to be 319.16 (idk why); formula is D * pi * 25.4
 controller = Controller(PRIMARY)
 
 fin = Motor(Ports.PORT6, GearSetting.RATIO_18_1, False)
@@ -213,7 +216,7 @@ controller.buttonUp.pressed(flopInputMode)
 
 # region Movement Routines
 
-def intakeSpeed(speed):
+def setIntakeSpeed(speed):
     fin.set_velocity(speed, PERCENT)
     fout.set_velocity(speed, PERCENT)
     bin.set_velocity(speed, PERCENT)
@@ -225,7 +228,7 @@ def pickUp():
 def putDown():
     fin.spin(REVERSE)
 
-def store():
+def store(): # NOTE: DEPRECATED
     pickUp()
     bin.spin(FORWARD)
     fout.spin(REVERSE)
@@ -270,7 +273,7 @@ def rdrive(speed, lerp):
     rmot.spin(FORWARD if rdrivelerp > 0 else REVERSE, abs(rdrivelerp * 100)*POWERCOEFS.get("right", 1), PERCENT)
 
 def drive():
-    intakeSpeed(100)
+    setIntakeSpeed(100)
     while True:
         lvel = controller.axis3.position()
         if inputmode == 1:
@@ -290,8 +293,8 @@ def drive():
             putTop()
         elif controller.buttonY.pressing() or controller.buttonL2.pressing():
             putMiddle()
-        elif controller.buttonA.pressing() or (controller.buttonR1.pressing() and controller.buttonR2.pressing()):
-            store()
+        #elif controller.buttonA.pressing() or (controller.buttonR1.pressing() and controller.buttonR2.pressing()):
+        #    store()
         elif controller.buttonB.pressing() or controller.buttonR1.pressing():
             pickUp()
         elif controller.buttonDown.pressing() or controller.buttonR2.pressing():
@@ -309,8 +312,8 @@ rotate = lambda vec, theta: Vector((math.cos(theta)*vec.x + math.sin(theta)*vec.
 class Vector(tuple):
     """Vectors without numpy."""
     def __init__(self, coord=(0,0)):
-        self.x = coord[0]
-        self.y = coord[1]
+        self.x = float(coord[0])
+        self.y = float(coord[1])
 
     def dist(self, other): # type: (Vector) -> float
         if not isinstance(other, Vector):
@@ -355,10 +358,7 @@ class Vector(tuple):
 # region Objective Definitions
 class Objective():
     """Generic target; Please don't initialize without subclassing."""
-    def activate(self): # type: () -> None
-        pass
-
-    def calculateError(self, state): # type: (State) -> None
+    def activate(self, state): # type: (State) -> None
         pass
 
     def completed(self, state): # type: (State) -> bool
@@ -371,8 +371,19 @@ class VPoseObjective(Objective):
         self.pos = pos
         self.rot = rot
 
-    def completed(self, state):
+    def completed(self, state): # type: (State) -> bool
         return self.pos.dist(state.pos) <= VPOSEEPSILON
+    
+class DriveObjective(Objective):
+    """Allows for direct control of driving (both forwards and backwards)."""
+    def __init__(self, dist): # type: (float) -> None
+        self.dist = dist
+    
+    def activate(self, state): # type: (State) -> None
+        self.pos = state.pos
+
+    def completed(self, state): # type: (State) -> bool
+        return self.pos.dist(state.pos) >= self.dist
 
 class RotationObjective(Objective):
     """A target heading."""
@@ -387,7 +398,7 @@ class RoutineObjective(Objective):
     def __init__(self, callback): # type: (Callable) -> None
         self.callback = callback # callback triggers the routine; this could be considered the most generic usuable routine
 
-    def activate(self):
+    def activate(self, state):
         self.callback()
 
 class DelayObjective(Objective):
@@ -396,14 +407,24 @@ class DelayObjective(Objective):
         self.t = False
         self.duration = duration
 
-    def activate(self):
+    def activate(self, state):
         self.t = time.time() * 1000
 
     def completed(self, _):
         return self.t and time.time() * 1000 - self.t >= self.duration
+    
+class PrintObjective(Objective):
+    """Prints a message to the brain screen."""
+    def __init__(self, message): # type: (str) -> None
+        self.message = message
+
+    def activate(self, state):
+        brain.screen.clear_screen()
+        brain.screen.print(self.message)
+
 # endregion Objective Definitions
 
-class Path():
+class Path:
     """Manages the objectives for the robot to follow. Beware: Heavy
     multivar-calc, arc-length parametrization, and splines inside!"""
     def __init__(self, objectives): # type: (list[Objective]) -> None
@@ -412,29 +433,34 @@ class Path():
     @staticmethod
     def parse(data): # type: (str) -> list[Objective]
         """Parses objectives from stored file data."""
-        lines = map(str.upper, map(str.replace, data.split("\n"), " ", ""))
+        lines = map(str.upper, map(lambda x: str.replace(x, " ", ""), data.split("\n")))
         out = []
         vel = 100
         for line in lines:
-            line = line.split(":")
+            print(line)
+            if not line or line[0] == "#":
+                continue
+            line = line.split(":", 1)
             if line[0] == "CURVE":
-                a, b, c, d = map(Vector, map(str.split, line[1].replace("(","").replace(")","").split("|"), ","))
+                a, b, c, d = map(Vector, map(lambda x: str.split(x, ","), line[1].replace("(","").replace(")","").split("|")))
                 arclength = Path._arcLength(lambda t: Path.Bez(t, a, b, c, d))
-                for i in range(math.ceil(arclength/SUBDIVRESOLUTION)*SUBDIVRESOLUTION+1):
-                    i /= SUBDIVRESOLUTION
+                for i in range(math.ceil(arclength/SUBDIVRESOLUTION)+1):
+                    i /= math.ceil(arclength/SUBDIVRESOLUTION) # math.ceil(...) is the number of subdivisions to make
                     out.append(VPoseObjective(vel, Path.Bez(i, a, b, c, d), Path.BezDer(i, a, b, c, d).theta))
 
             elif line[0] == "CMD":
-                left, right = line[1].split("=")
+                left, right = line[1].split("=", 1)
                 if left == "SET_VELOCITY":
                     vel = int(right)
                 elif left == "TURN_HEADING":
                     out.append(RotationObjective(float(right)))
+                elif left == "DRIVE":
+                    out.append(DriveObjective(float(right)))
                 elif left == "ROUTINE":
                     routines = {
                         "PICK_UP": pickUp,
                         "PUT_DOWN": putDown,
-                        "STORE": store,
+                        #"STORE": store,
                         "PUT_TOP": putTop,
                         "PUT_MIDDLE": putMiddle,
                         "STOP_INTAKE": stopIntake
@@ -442,6 +468,8 @@ class Path():
                     out.append(RoutineObjective(routines[right]))
                 elif left == "DELAY":
                     out.append(DelayObjective(int(right)))
+                elif left == "PRINT":
+                    out.append(PrintObjective(right.strip()))
                 else:
                     raise ValueError("Invalid CMD \"{}\"!".format(left))
             else:
@@ -461,7 +489,7 @@ class Path():
     def advanceObjectives(self, state): #type: (State) -> None
         """Discards completed objectives from start of queue; activates new objectives as necessary."""
         while self.currentObjective:
-            self.currentObjective.activate()
+            self.currentObjective.activate(state)
             if self.currentObjective.completed(state):
                 self.objectives.pop(0)
     
@@ -523,8 +551,8 @@ class State:
         self.vel = velocity # Sensor Data
 
         self.path = Path(pathData) # PreNav Ddata
-        self.drivePid = PID(**DRIVEPIDCOEFS)
-        self.turnPid = PID(**TURNPIDCOEFS)
+        self.drivePid = PID(DRIVEPIDCOEFS.get("proportional", 0), DRIVEPIDCOEFS.get("integral", 0), DRIVEPIDCOEFS.get("derivative", 0))
+        self.turnPid = PID(TURNPIDCOEFS.get("proportional", 0), TURNPIDCOEFS.get("integral", 0), TURNPIDCOEFS.get("derivative", 0))
 
         # Tempvars
         self._l = self._r = self._0 = 0
@@ -591,23 +619,23 @@ class State:
             turnDiff = self.turnPid.loop(Ttheta)
             ldrive(turnDiff, LERPCOEFS.get("auton", 1))
             rdrive(-turnDiff, LERPCOEFS.get("auton", 1))
-        elif isinstance(self.path.currentObjective, RoutineObjective):
-            pass
-        elif isinstance(self.path.currentObjective, DelayObjective):
-            pass
+        elif isinstance(self.path.currentObjective, DriveObjective):
+            driveDiff = self.drivePid.loop(self.path.currentObjective.dist - self.pos.dist(self.path.currentObjective.pos))
+            ldrive(driveDiff, LERPCOEFS.get("auton", 1))
+            rdrive(driveDiff, LERPCOEFS.get("auton", 1))
         else:
             pass
 
 
 def auton(override=False):
-    t = time.time()
+    #t = time.time()
     path = None
     #f = open("spline0.txt", "r")
     #Path()
     fin = open("spline" + str(SAVE_SLOT) + ".txt", "r")
     data = fin.read()
     fin.close()
-    state = State(**STARTPOS, pathData=Path.parse(data))
+    state = State(STARTPOS["x"], STARTPOS["y"], STARTPOS["heading"], pathData=Path.parse(data)) # Step 3
     while override or (competition.is_autonomous() and competition.is_enabled()):
         if override:
             lvel = controller.axis3.position()
@@ -623,14 +651,15 @@ def auton(override=False):
 
         #while time.time()-t<0.01:
         #    time.sleep(0.001)
-        t += (td := time.time() - t)
-        state.consumeData(ODOMMODE)
-        state.trackOdometry(ODOMMODE)
-        state.path.advanceObjectives(state)
+        #t += (td := time.time() - t)
+        state.consumeData(ODOMMODE) # Step 1
+        state.trackOdometry(ODOMMODE) # Step 2
+        state.path.advanceObjectives(state) # Step 4 (ish)
         if not override:
-            state.actionNavigation()
+            state.actionNavigation() # Step 5
 
         controller.screen.set_cursor(1, 1)
+        controller.screen.print(state.path.currentObjective.__class__.__name__ if state.path.currentObjective else "NullObjective")
         controller.screen.print("X: {:.2f} Y: {:.2f} R: {:.2f}".format(state.pos[0], state.pos[1], state.rot))
 
 # endregion Autonomous Routines

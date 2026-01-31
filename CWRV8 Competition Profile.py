@@ -101,11 +101,11 @@ BOTCONSTANTS = { # Intrinsic properties of the robot
 }
 BRAKEMODE = COAST # COAST = no resistance; BRAKE = short the + and - leads of the motor, aka regenerative braking; HOLD = use encoder to counter rotation
 POWERCOEFS = { # Manual correction of potential deviations in motor efficiency; a trivial difference in speed is achieved at 85-127
-    "left": 0.85,
-    "right": 0.85
+    "left": 0.95,
+    "right": 0.95
 }
 LERPCOEFS = { # How smooth the acceleration should be; used for slip prevention
-    "drive": 0.85,
+    "drive": 0.9,
     "auton": 1 # UNUSED 0.25; isolated tracking wheels remove the need for smoothing
 }
 AUTONPOWERCOEF = 0.8 # Autonomous speed restriction; scaled from normal operating speed in addition to POWERCOEFS
@@ -132,6 +132,9 @@ rmot = MotorGroup(rfmot, rbmot)
 inert = Inertial(Ports.PORT15)
 drivetrain = SmartDrive(lmot, rmot, inert, units=MM, **BOTCONSTANTS) # 4th arg used to be 319.16 (idk why); formula is D * pi * 25.4
 controller = Controller(PRIMARY)
+
+arm = DigitalOut(brain.three_wire_port.h)
+intake = DigitalOut(brain.three_wire_port.g)
 
 fin = Motor(Ports.PORT6, GearSetting.RATIO_18_1, False)
 bin = Motor(Ports.PORT18, GearSetting.RATIO_18_1, False)
@@ -164,7 +167,7 @@ def flopInputMode():
 # Calibrate sensors
 calibrate()
 
-controller.buttonUp.pressed(flopInputMode)
+#controller.buttonUp.pressed(flopInputMode)
 
 # endregion Setup & Settings
 
@@ -182,7 +185,7 @@ def pickUp():
 def putDown():
     fin.spin(REVERSE)
 
-def store():
+def store(): # NOTE: DEPRECATED
     pickUp()
     bin.spin(FORWARD)
     fout.spin(REVERSE)
@@ -205,6 +208,19 @@ def stopIntake():
     bin.stop(BRAKEMODE)
     fout.stop(BRAKEMODE)
     bout.stop(BRAKEMODE)
+
+def extendArm():
+    arm.set(True)
+
+def retractArm():
+    arm.set(False)
+
+def extendIntake():
+    intake.set(True)
+
+def retractIntake():
+    intake.set(False)
+
 
 def ldrive(speed, lerp): # Ignore that this lerp is clock-dependent for now (not a big issue)
     global ldrivelerp
@@ -243,18 +259,33 @@ def drive():
             ldrive(lvel/100, LERPCOEFS.get("drive", 1))
             rdrive(rvel/100, LERPCOEFS.get("drive", 1))
 
-        if controller.buttonX.pressing() or controller.buttonL1.pressing():
+        if controller.buttonUp.pressing():
+            extendIntake()
+        elif controller.buttonDown.pressing():
+            retractIntake()
+        
+        if controller.buttonLeft.pressing():
+            extendArm()
+        elif controller.buttonRight.pressing():
+            retractArm()
+
+        if controller.buttonL1.pressing() and controller.buttonL2.pressing():
+            extendArm()
+        elif controller.buttonL1.pressing():
             putTop()
-        elif controller.buttonY.pressing() or controller.buttonL2.pressing():
+        elif controller.buttonL2.pressing():
             putMiddle()
-        elif controller.buttonA.pressing() or (controller.buttonR1.pressing() and controller.buttonR2.pressing()):
-            store()
-        elif controller.buttonB.pressing() or controller.buttonR1.pressing():
+        elif (controller.buttonR1.pressing() and controller.buttonR2.pressing()):
+            retractArm()
+        elif controller.buttonR1.pressing():
             pickUp()
-        elif controller.buttonDown.pressing() or controller.buttonR2.pressing():
+        elif controller.buttonR2.pressing():
             putDown()
         else:
             stopIntake()
+
+        if not (controller.buttonL1.pressing() or controller.buttonL2.pressing()):
+            retractArm()
 
 # endregion Movement Routines
 
@@ -275,10 +306,10 @@ def auton():
     drivetrain.drive_for(FORWARD, 730, MM)
     drivetrain.turn_to_heading(90, DEGREES)
     drivetrain.drive_for(FORWARD, 150, MM)
-    intakeSpeed(80)
+    intakeSpeed(70)
     putTop()
-    drivetrain.drive_for(FORWARD, 50, MM)
-    time.sleep(2.75)
+    drivetrain.drive_for(FORWARD, 40, MM)
+    time.sleep(2.70)
 
 # endregion Easy Auton
 
